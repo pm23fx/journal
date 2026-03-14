@@ -457,33 +457,33 @@ function renderTable() {
     const fps = (v) => v!=null?((v>=0?'+':'')+parseFloat(v).toFixed(1)):'—';
     const fdate = t.date ? new Date(t.date+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
     const thumbs = [
-      t.photo_before ? \`<img class="photo-thumb" src="\${t.photo_before}" title="Before" onclick="openLightbox(\${t.id},'before')">\` : '',
-      t.photo_after  ? \`<img class="photo-thumb" src="\${t.photo_after}"  title="After"  onclick="openLightbox(\${t.id},'after')">\`  : '',
+      t.photo_before ? `<img class="photo-thumb" src="${t.photo_before}" title="Before" onclick="openLightbox(${t.id},'before')">` : '',
+      t.photo_after  ? `<img class="photo-thumb" src="${t.photo_after}"  title="After"  onclick="openLightbox(${t.id},'after')">`  : '',
     ].join('') || '<span style="color:var(--mgray);font-size:11px">—</span>';
-    return \`<tr class="\${rc}">
-      <td class="mono" style="color:var(--dgray)">\${i+1}</td>
-      <td>\${fdate}</td>
-      <td><strong>\${t.pair||'—'}</strong></td>
-      <td style="color:var(--dgray);font-size:11px">\${t.session||'—'}</td>
-      <td><span class="tag \${dc}">\${t.direction||'—'}</span></td>
-      <td class="mono">\${fn(t.entry_price,5)}</td>
-      <td class="mono" style="color:var(--red)">\${fn(t.stop_loss,5)}</td>
-      <td class="mono" style="color:var(--green)">\${fn(t.take_profit,5)}</td>
-      <td class="mono">\${fn(t.exit_price,5)}</td>
-      <td class="mono">\${fn(t.lot_size,2)}</td>
-      <td><span class="tag \${t.result?t.result.toLowerCase():''}">\${t.result||'—'}</span></td>
-      <td class="mono \${pipC}">\${fps(t.pips)}</td>
-      <td class="mono \${pnlC}">\${fp(t.pnl)}</td>
-      <td class="mono"><strong>$\${runBal.toFixed(2)}</strong></td>
-      <td class="mono">\${t.rr_ratio!=null?t.rr_ratio+'R':'—'}</td>
-      <td style="font-size:11px;color:var(--dgray)">\${t.strategy||'—'}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--dgray)" title="\${t.notes||''}">\${t.notes||'—'}</td>
-      <td>\${thumbs}</td>
+    return `<tr class="${rc}">
+      <td class="mono" style="color:var(--dgray)">${i+1}</td>
+      <td>${fdate}</td>
+      <td><strong>${t.pair||'—'}</strong></td>
+      <td style="color:var(--dgray);font-size:11px">${t.session||'—'}</td>
+      <td><span class="tag ${dc}">${t.direction||'—'}</span></td>
+      <td class="mono">${fn(t.entry_price,5)}</td>
+      <td class="mono" style="color:var(--red)">${fn(t.stop_loss,5)}</td>
+      <td class="mono" style="color:var(--green)">${fn(t.take_profit,5)}</td>
+      <td class="mono">${fn(t.exit_price,5)}</td>
+      <td class="mono">${fn(t.lot_size,2)}</td>
+      <td><span class="tag ${t.result?t.result.toLowerCase():''}">${t.result||'—'}</span></td>
+      <td class="mono ${pipC}">${fps(t.pips)}</td>
+      <td class="mono ${pnlC}">${fp(t.pnl)}</td>
+      <td class="mono"><strong>$${runBal.toFixed(2)}</strong></td>
+      <td class="mono">${t.rr_ratio!=null?t.rr_ratio+'R':'—'}</td>
+      <td style="font-size:11px;color:var(--dgray)">${t.strategy||'—'}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--dgray)" title="${t.notes||''}">${t.notes||'—'}</td>
+      <td>${thumbs}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-outline btn-sm" onclick="editTrade(\${t.id})" style="padding:4px 8px;font-size:11px">Edit</button>
-        <button class="btn btn-danger" onclick="deleteTrade(\${t.id})">✕</button>
+        <button class="btn btn-outline btn-sm" onclick="editTrade(${t.id})" style="padding:4px 8px;font-size:11px">Edit</button>
+        <button class="btn btn-danger" onclick="deleteTrade(${t.id})">✕</button>
       </td>
-    </tr>\`;
+    </tr>`;
   });
   tbody.innerHTML = rows.join('');
 }
@@ -498,37 +498,37 @@ async function loadStats() {
     const ret = startingBalance>0 ? ((parseFloat(sm.total_pnl)||0)/startingBalance*100).toFixed(2) : 0;
     const pnl = parseFloat(sm.total_pnl)||0;
 
-    document.getElementById('statsCards').innerHTML = \`
-      <div class="card gold"><div class="lbl">Current Balance</div><div class="val">$\${bal.toFixed(2)}</div><div class="sub">Started $\${startingBalance.toFixed(2)}</div></div>
-      <div class="card"><div class="lbl">Total P&L</div><div class="val \${pnl>=0?'pos':'neg'}">\${pnl>=0?'+':''}\$\${pnl.toFixed(2)}</div><div class="sub">\${ret>=0?'+':''}\${ret}% return</div></div>
-      <div class="card"><div class="lbl">Win Rate</div><div class="val \${wr>=50?'pos':'neg'}">\${wr}%</div><div class="sub">\${sm.wins||0}W / \${sm.losses||0}L / \${sm.breakevens||0}BE</div></div>
-      <div class="card"><div class="lbl">Total Trades</div><div class="val">\${sm.total_trades||0}</div><div class="sub">\${parseFloat(sm.total_pips||0)>=0?'+':''}\${parseFloat(sm.total_pips||0).toFixed(1)} pips</div></div>
-      <div class="card"><div class="lbl">Avg R:R</div><div class="val">\${sm.avg_rr||'—'}R</div><div class="sub">per trade</div></div>
-      <div class="card"><div class="lbl">Best Trade</div><div class="val pos">+$\${sm.best_trade||0}</div></div>
-    \`;
+    document.getElementById('statsCards').innerHTML = `
+      <div class="card gold"><div class="lbl">Current Balance</div><div class="val">$${bal.toFixed(2)}</div><div class="sub">Started $${startingBalance.toFixed(2)}</div></div>
+      <div class="card"><div class="lbl">Total P&L</div><div class="val ${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}\$${pnl.toFixed(2)}</div><div class="sub">${ret>=0?'+':''}${ret}% return</div></div>
+      <div class="card"><div class="lbl">Win Rate</div><div class="val ${wr>=50?'pos':'neg'}">${wr}%</div><div class="sub">${sm.wins||0}W / ${sm.losses||0}L / ${sm.breakevens||0}BE</div></div>
+      <div class="card"><div class="lbl">Total Trades</div><div class="val">${sm.total_trades||0}</div><div class="sub">${parseFloat(sm.total_pips||0)>=0?'+':''}${parseFloat(sm.total_pips||0).toFixed(1)} pips</div></div>
+      <div class="card"><div class="lbl">Avg R:R</div><div class="val">${sm.avg_rr||'—'}R</div><div class="sub">per trade</div></div>
+      <div class="card"><div class="lbl">Best Trade</div><div class="val pos">+$${sm.best_trade||0}</div></div>
+    `;
 
-    const sRows = (s.sessions||[]).map(x=>\`<tr><td>\${x.session}</td><td>\${x.wins}/\${x.trades}</td><td class="\${x.pnl>=0?'pos':'neg'}">\${x.pnl>=0?'+':''}\$\${x.pnl}</td></tr>\`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const pRows = (s.pairs||[]).map(x=>\`<tr><td><strong>\${x.pair}</strong></td><td>\${x.wins}/\${x.trades}</td><td class="\${x.pnl>=0?'pos':'neg'}">\${x.pnl>=0?'+':''}\$\${x.pnl}</td></tr>\`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const stRows = (s.strategies||[]).map(x=>\`<tr><td>\${x.strategy}</td><td>\${x.wins}/\${x.trades}</td><td class="\${x.pnl>=0?'pos':'neg'}">\${x.pnl>=0?'+':''}\$\${x.pnl}</td></tr>\`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const extra = \`
-      <tr><td>Avg Win</td><td style="color:var(--green)">+$\${sm.avg_win||0}</td></tr>
-      <tr><td>Avg Loss</td><td style="color:var(--red)">$\${sm.avg_loss||0}</td></tr>
-      <tr><td>Worst Trade</td><td style="color:var(--red)">$\${sm.worst_trade||0}</td></tr>
-      <tr><td>Total Pips</td><td class="\${parseFloat(sm.total_pips||0)>=0?'pos':'neg'}">\${parseFloat(sm.total_pips||0)>=0?'+':''}\${sm.total_pips||0}</td></tr>
-    \`;
+    const sRows = (s.sessions||[]).map(x=>`<tr><td>${x.session}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const pRows = (s.pairs||[]).map(x=>`<tr><td><strong>${x.pair}</strong></td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const stRows = (s.strategies||[]).map(x=>`<tr><td>${x.strategy}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const extra = `
+      <tr><td>Avg Win</td><td style="color:var(--green)">+$${sm.avg_win||0}</td></tr>
+      <tr><td>Avg Loss</td><td style="color:var(--red)">$${sm.avg_loss||0}</td></tr>
+      <tr><td>Worst Trade</td><td style="color:var(--red)">$${sm.worst_trade||0}</td></tr>
+      <tr><td>Total Pips</td><td class="${parseFloat(sm.total_pips||0)>=0?'pos':'neg'}">${parseFloat(sm.total_pips||0)>=0?'+':''}${sm.total_pips||0}</td></tr>
+    `;
 
-    document.getElementById('statsGrid').innerHTML = \`
+    document.getElementById('statsGrid').innerHTML = `
       <div class="stats-block"><div class="stats-block-hdr">Trade Stats</div><table>
-        <tr><td>Total Trades</td><td>\${sm.total_trades||0}</td></tr>
-        <tr><td>Wins</td><td style="color:var(--green)">\${sm.wins||0}</td></tr>
-        <tr><td>Losses</td><td style="color:var(--red)">\${sm.losses||0}</td></tr>
-        <tr><td>Breakeven</td><td>\${sm.breakevens||0}</td></tr>
-        \${extra}
+        <tr><td>Total Trades</td><td>${sm.total_trades||0}</td></tr>
+        <tr><td>Wins</td><td style="color:var(--green)">${sm.wins||0}</td></tr>
+        <tr><td>Losses</td><td style="color:var(--red)">${sm.losses||0}</td></tr>
+        <tr><td>Breakeven</td><td>${sm.breakevens||0}</td></tr>
+        ${extra}
       </table></div>
-      <div class="stats-block"><div class="stats-block-hdr">Session Performance</div><table>\${sRows}</table></div>
-      <div class="stats-block"><div class="stats-block-hdr">Pair Performance</div><table>\${pRows}</table></div>
-      <div class="stats-block"><div class="stats-block-hdr">Strategy Performance</div><table>\${stRows}</table></div>
-    \`;
+      <div class="stats-block"><div class="stats-block-hdr">Session Performance</div><table>${sRows}</table></div>
+      <div class="stats-block"><div class="stats-block-hdr">Pair Performance</div><table>${pRows}</table></div>
+      <div class="stats-block"><div class="stats-block-hdr">Strategy Performance</div><table>${stRows}</table></div>
+    `;
   } catch(e) {
     document.getElementById('statsCards').innerHTML = '<div style="color:var(--dgray);padding:20px">Could not load stats</div>';
   }
@@ -594,7 +594,7 @@ function lbNav(type) {
 function exportCSV() {
   if(!trades.length){toast('No trades to export');return;}
   const h=['Date','Pair','Session','Direction','Entry','SL','TP','Exit','Lots','Result','Pips','P&L','RR','Strategy','Notes'];
-  const rows=trades.map(t=>[t.date,t.pair,t.session,t.direction,t.entry_price,t.stop_loss,t.take_profit,t.exit_price,t.lot_size,t.result,t.pips,t.pnl,t.rr_ratio,t.strategy,\`"\${(t.notes||'').replace(/"/g,'""')}"\`].join(','));
+  const rows=trades.map(t=>[t.date,t.pair,t.session,t.direction,t.entry_price,t.stop_loss,t.take_profit,t.exit_price,t.lot_size,t.result,t.pips,t.pnl,t.rr_ratio,t.strategy,`"${(t.notes||'').replace(/"/g,'""')}"`].join(','));
   const a=document.createElement('a');
   a.href='data:text/csv,'+encodeURIComponent([h.join(','),...rows].join('\\n'));
   a.download='PM23FX_Trades.csv'; a.click();
