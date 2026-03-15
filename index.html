@@ -138,7 +138,7 @@
     <div class="form-grid">
       <div class="field"><label>Date</label><input type="date" id="f_date"></div>
       <div class="field"><label>Pair</label>
-        <select id="f_pair"><option value="">Select...</option>
+        <select id="f_pair" onchange="calcLive()"><option value="">Select...</option>
           <option>GBPJPY</option><option>USDJPY</option><option>EURJPY</option>
           <option>GBPUSD</option><option>EURUSD</option><option>AUDJPY</option>
           <option>NZDJPY</option><option>CADJPY</option><option>CHFJPY</option>
@@ -151,7 +151,7 @@
         </select>
       </div>
       <div class="field"><label>Direction</label>
-        <select id="f_dir"><option value="">Select...</option><option>BUY</option><option>SELL</option></select>
+        <select id="f_dir" onchange="calcLive()"><option value="">Select...</option><option>BUY</option><option>SELL</option></select>
       </div>
       <div class="field"><label>Entry Price</label><input type="number" id="f_entry" step="0.00001" placeholder="0.00000" oninput="calcLive()"></div>
       <div class="field"><label>Stop Loss</label><input type="number" id="f_sl" step="0.00001" placeholder="0.00000" oninput="calcLive()"></div>
@@ -236,7 +236,6 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────
-// API is same origin (Worker serves both HTML and API)
 const API = '';
 
 let trades = [];
@@ -244,6 +243,23 @@ let editId = null;
 let photoData = { before: null, after: null };
 let lbTrade = null;
 let startingBalance = 500;
+
+// ── Pip size helper (JPY pairs use 0.01, all others use 0.0001) ───────────
+function getPipSize(pair) {
+  if (!pair) return 0.0001;
+  return pair.toUpperCase().includes('JPY') ? 0.01 : 0.0001;
+}
+
+// ── Pip value per lot helper ──────────────────────────────────────────────
+// For JPY pairs: 1 pip = ~$9.09 per standard lot (approx 1000/rate, simplified to 1000/110)
+// We keep it simple: standard pip value per lot
+// Non-JPY: 1 pip = $10 per standard lot
+// JPY: 1 pip = ~$9 per standard lot (approximate; exact = 1000/current_rate)
+// For journal purposes we use $9 as a reasonable constant for JPY pairs
+function getPipValue(pair) {
+  if (!pair) return 10;
+  return pair.toUpperCase().includes('JPY') ? 9 : 10;
+}
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 function toast(msg, dur=2500) {
@@ -328,56 +344,75 @@ function clearForm() {
   document.getElementById('saveBtn').textContent = 'Save Trade';
 }
 
+// ── Live Calc (JPY-aware) ─────────────────────────────────────────────────
 function calcLive() {
+  const pair  = document.getElementById('f_pair').value;
   const entry = parseFloat(document.getElementById('f_entry').value);
   const sl    = parseFloat(document.getElementById('f_sl').value);
   const tp    = parseFloat(document.getElementById('f_tp').value);
   const exit  = parseFloat(document.getElementById('f_exit').value);
   const lot   = parseFloat(document.getElementById('f_lot').value);
   const dir   = document.getElementById('f_dir').value;
+
+  const pipSize  = getPipSize(pair);
+  const pipValue = getPipValue(pair);
+
   if (entry && exit && dir) {
-    const pips = dir==='BUY' ? Math.round((exit-entry)*10000*10)/10 : Math.round((entry-exit)*10000*10)/10;
+    const rawDiff = dir === 'BUY' ? (exit - entry) : (entry - exit);
+    const pips = Math.round((rawDiff / pipSize) * 10) / 10;
     document.getElementById('f_pips').value = pips.toFixed(1);
-    if (lot) document.getElementById('f_pnl').value = (pips>=0?'+':'')+( Math.round(pips*lot*10*100)/100).toFixed(2);
+    if (lot) {
+      // P&L = pips × lot × pipValue (per standard lot)
+      const pnl = Math.round(pips * lot * pipValue * 100) / 100;
+      document.getElementById('f_pnl').value = (pnl >= 0 ? '+' : '') + pnl.toFixed(2);
+    }
   }
+
   if (entry && sl && tp) {
-    const slD=Math.abs(sl-entry), tpD=Math.abs(tp-entry);
-    if(slD>0) document.getElementById('f_rr').value = (Math.round(tpD/slD*10)/10).toFixed(1)+'R';
+    const slD = Math.abs(sl - entry);
+    const tpD = Math.abs(tp - entry);
+    if (slD > 0) document.getElementById('f_rr').value = (Math.round(tpD / slD * 10) / 10).toFixed(1) + 'R';
   }
 }
 
+// ── Save Trade (JPY-aware) ────────────────────────────────────────────────
 async function saveTrade() {
   const pair = document.getElementById('f_pair').value;
   const date = document.getElementById('f_date').value;
   if (!pair) { toast('Please select a pair'); return; }
 
-  const entry = parseFloat(document.getElementById('f_entry').value)||null;
-  const sl    = parseFloat(document.getElementById('f_sl').value)||null;
-  const tp    = parseFloat(document.getElementById('f_tp').value)||null;
-  const exit  = parseFloat(document.getElementById('f_exit').value)||null;
-  const lot   = parseFloat(document.getElementById('f_lot').value)||null;
+  const entry = parseFloat(document.getElementById('f_entry').value) || null;
+  const sl    = parseFloat(document.getElementById('f_sl').value)    || null;
+  const tp    = parseFloat(document.getElementById('f_tp').value)    || null;
+  const exit  = parseFloat(document.getElementById('f_exit').value)  || null;
+  const lot   = parseFloat(document.getElementById('f_lot').value)   || null;
   const dir   = document.getElementById('f_dir').value;
 
-  let pips=null, pnl=null, rr=null;
+  const pipSize  = getPipSize(pair);
+  const pipValue = getPipValue(pair);
+
+  let pips = null, pnl = null, rr = null;
   if (entry && exit && dir) {
-    pips = dir==='BUY' ? Math.round((exit-entry)*10000*10)/10 : Math.round((entry-exit)*10000*10)/10;
-    if (lot) pnl = Math.round(pips*lot*10*100)/100;
+    const rawDiff = dir === 'BUY' ? (exit - entry) : (entry - exit);
+    pips = Math.round((rawDiff / pipSize) * 10) / 10;
+    if (lot) pnl = Math.round(pips * lot * pipValue * 100) / 100;
   }
   if (entry && sl && tp) {
-    const slD=Math.abs(sl-entry), tpD=Math.abs(tp-entry);
-    if(slD>0) rr = Math.round(tpD/slD*10)/10;
+    const slD = Math.abs(sl - entry);
+    const tpD = Math.abs(tp - entry);
+    if (slD > 0) rr = Math.round(tpD / slD * 10) / 10;
   }
 
   const payload = {
-    date: date||null, pair,
-    session:   document.getElementById('f_session').value||null,
-    direction: dir||null,
+    date: date || null, pair,
+    session:   document.getElementById('f_session').value  || null,
+    direction: dir || null,
     entry_price: entry, stop_loss: sl, take_profit: tp,
     exit_price: exit, lot_size: lot,
-    result:    document.getElementById('f_result').value||null,
+    result:    document.getElementById('f_result').value   || null,
     pips, pnl, rr_ratio: rr,
-    strategy:  document.getElementById('f_strategy').value||null,
-    notes:     document.getElementById('f_notes').value||null,
+    strategy:  document.getElementById('f_strategy').value || null,
+    notes:     document.getElementById('f_notes').value    || null,
     photo_before: photoData.before,
     photo_after:  photoData.after,
   };
@@ -413,27 +448,27 @@ function editTrade(id) {
   const t = trades.find(t => t.id === id);
   if (!t) return;
   editId = id;
-  document.getElementById('f_date').value     = t.date||'';
-  document.getElementById('f_pair').value     = t.pair||'';
-  document.getElementById('f_session').value  = t.session||'';
-  document.getElementById('f_dir').value      = t.direction||'';
-  document.getElementById('f_entry').value    = t.entry_price||'';
-  document.getElementById('f_sl').value       = t.stop_loss||'';
-  document.getElementById('f_tp').value       = t.take_profit||'';
-  document.getElementById('f_exit').value     = t.exit_price||'';
-  document.getElementById('f_lot').value      = t.lot_size||'';
-  document.getElementById('f_result').value   = t.result||'';
-  document.getElementById('f_strategy').value = t.strategy||'';
-  document.getElementById('f_notes').value    = t.notes||'';
-  document.getElementById('f_pips').value     = t.pips!=null ? t.pips : '';
-  document.getElementById('f_pnl').value      = t.pnl!=null  ? t.pnl  : '';
-  document.getElementById('f_rr').value       = t.rr_ratio!=null ? t.rr_ratio+'R' : '';
+  document.getElementById('f_date').value     = t.date     || '';
+  document.getElementById('f_pair').value     = t.pair     || '';
+  document.getElementById('f_session').value  = t.session  || '';
+  document.getElementById('f_dir').value      = t.direction|| '';
+  document.getElementById('f_entry').value    = t.entry_price || '';
+  document.getElementById('f_sl').value       = t.stop_loss   || '';
+  document.getElementById('f_tp').value       = t.take_profit || '';
+  document.getElementById('f_exit').value     = t.exit_price  || '';
+  document.getElementById('f_lot').value      = t.lot_size    || '';
+  document.getElementById('f_result').value   = t.result   || '';
+  document.getElementById('f_strategy').value = t.strategy || '';
+  document.getElementById('f_notes').value    = t.notes    || '';
+  document.getElementById('f_pips').value     = t.pips  != null ? t.pips  : '';
+  document.getElementById('f_pnl').value      = t.pnl   != null ? t.pnl   : '';
+  document.getElementById('f_rr').value       = t.rr_ratio != null ? t.rr_ratio + 'R' : '';
   document.getElementById('formTitle').textContent = 'Edit Trade';
-  document.getElementById('saveBtn').textContent = 'Update Trade';
-  if (t.photo_before) { photoData.before=t.photo_before; showPhotoPreview('before',t.photo_before); }
-  if (t.photo_after)  { photoData.after=t.photo_after;   showPhotoPreview('after', t.photo_after);  }
+  document.getElementById('saveBtn').textContent   = 'Update Trade';
+  if (t.photo_before) { photoData.before = t.photo_before; showPhotoPreview('before', t.photo_before); }
+  if (t.photo_after)  { photoData.after  = t.photo_after;  showPhotoPreview('after',  t.photo_after);  }
   toggleForm(true);
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -443,41 +478,40 @@ function renderTable() {
     tbody.innerHTML = '<tr><td colspan="19"><div class="empty-state"><div class="icon">📋</div><p>No trades yet — click <strong>+ New Trade</strong> to log your first entry</p></div></td></tr>';
     return;
   }
-  // trades come newest-first from API, reverse for display so balance runs correctly
   const display = [...trades].reverse();
   let runBal = startingBalance;
-  const rows = display.map((t,i) => {
-    if (t.pnl!=null) runBal += parseFloat(t.pnl);
-    const rc = t.result==='Win'?'win':t.result==='Loss'?'loss':t.result==='BE'?'be':'';
-    const dc = (t.direction||'').toLowerCase();
-    const pnlC = t.pnl>0?'pos':t.pnl<0?'neg':'';
-    const pipC = t.pips>0?'pos':t.pips<0?'neg':'';
-    const fn  = (v,d=2) => v!=null&&v!==''?parseFloat(v).toFixed(d):'—';
-    const fp  = (v) => v!=null?((v>=0?'+$':'-$')+Math.abs(parseFloat(v)).toFixed(2)):'—';
-    const fps = (v) => v!=null?((v>=0?'+':'')+parseFloat(v).toFixed(1)):'—';
-    const fdate = t.date ? new Date(t.date+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
+  const rows = display.map((t, i) => {
+    if (t.pnl != null) runBal += parseFloat(t.pnl);
+    const rc   = t.result === 'Win' ? 'win' : t.result === 'Loss' ? 'loss' : t.result === 'BE' ? 'be' : '';
+    const dc   = (t.direction || '').toLowerCase();
+    const pnlC = t.pnl  > 0 ? 'pos' : t.pnl  < 0 ? 'neg' : '';
+    const pipC = t.pips > 0 ? 'pos' : t.pips < 0 ? 'neg' : '';
+    const fn   = (v, d=2) => v != null && v !== '' ? parseFloat(v).toFixed(d) : '—';
+    const fp   = (v) => v != null ? ((v >= 0 ? '+$' : '-$') + Math.abs(parseFloat(v)).toFixed(2)) : '—';
+    const fps  = (v) => v != null ? ((v >= 0 ? '+' : '') + parseFloat(v).toFixed(1)) : '—';
+    const fdate = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' }) : '—';
     const thumbs = [
       t.photo_before ? `<img class="photo-thumb" src="${t.photo_before}" title="Before" onclick="openLightbox(${t.id},'before')">` : '',
-      t.photo_after  ? `<img class="photo-thumb" src="${t.photo_after}"  title="After"  onclick="openLightbox(${t.id},'after')">`  : '',
+      t.photo_after  ? `<img class="photo-thumb" src="${t.photo_after}"  title="After"  onclick="openLightbox(${t.id},'after')">` : '',
     ].join('') || '<span style="color:var(--mgray);font-size:11px">—</span>';
     return `<tr class="${rc}">
       <td class="mono" style="color:var(--dgray)">${i+1}</td>
       <td>${fdate}</td>
-      <td><strong>${t.pair||'—'}</strong></td>
-      <td style="color:var(--dgray);font-size:11px">${t.session||'—'}</td>
-      <td><span class="tag ${dc}">${t.direction||'—'}</span></td>
-      <td class="mono">${fn(t.entry_price,5)}</td>
-      <td class="mono" style="color:var(--red)">${fn(t.stop_loss,5)}</td>
-      <td class="mono" style="color:var(--green)">${fn(t.take_profit,5)}</td>
-      <td class="mono">${fn(t.exit_price,5)}</td>
-      <td class="mono">${fn(t.lot_size,2)}</td>
-      <td><span class="tag ${t.result?t.result.toLowerCase():''}">${t.result||'—'}</span></td>
+      <td><strong>${t.pair || '—'}</strong></td>
+      <td style="color:var(--dgray);font-size:11px">${t.session || '—'}</td>
+      <td><span class="tag ${dc}">${t.direction || '—'}</span></td>
+      <td class="mono">${fn(t.entry_price, 5)}</td>
+      <td class="mono" style="color:var(--red)">${fn(t.stop_loss, 5)}</td>
+      <td class="mono" style="color:var(--green)">${fn(t.take_profit, 5)}</td>
+      <td class="mono">${fn(t.exit_price, 5)}</td>
+      <td class="mono">${fn(t.lot_size, 2)}</td>
+      <td><span class="tag ${t.result ? t.result.toLowerCase() : ''}">${t.result || '—'}</span></td>
       <td class="mono ${pipC}">${fps(t.pips)}</td>
       <td class="mono ${pnlC}">${fp(t.pnl)}</td>
       <td class="mono"><strong>$${runBal.toFixed(2)}</strong></td>
-      <td class="mono">${t.rr_ratio!=null?t.rr_ratio+'R':'—'}</td>
-      <td style="font-size:11px;color:var(--dgray)">${t.strategy||'—'}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--dgray)" title="${t.notes||''}">${t.notes||'—'}</td>
+      <td class="mono">${t.rr_ratio != null ? t.rr_ratio + 'R' : '—'}</td>
+      <td style="font-size:11px;color:var(--dgray)">${t.strategy || '—'}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--dgray)" title="${t.notes || ''}">${t.notes || '—'}</td>
       <td>${thumbs}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-outline btn-sm" onclick="editTrade(${t.id})" style="padding:4px 8px;font-size:11px">Edit</button>
@@ -493,10 +527,10 @@ async function loadStats() {
   try {
     const s = await apiFetch('/api/stats');
     const sm = s.summary || {};
-    const bal = startingBalance + (parseFloat(sm.total_pnl)||0);
-    const wr  = sm.total_trades>0 ? (sm.wins/sm.total_trades*100).toFixed(1) : 0;
-    const ret = startingBalance>0 ? ((parseFloat(sm.total_pnl)||0)/startingBalance*100).toFixed(2) : 0;
-    const pnl = parseFloat(sm.total_pnl)||0;
+    const bal = startingBalance + (parseFloat(sm.total_pnl) || 0);
+    const wr  = sm.total_trades > 0 ? (sm.wins / sm.total_trades * 100).toFixed(1) : 0;
+    const ret = startingBalance > 0 ? ((parseFloat(sm.total_pnl) || 0) / startingBalance * 100).toFixed(2) : 0;
+    const pnl = parseFloat(sm.total_pnl) || 0;
 
     document.getElementById('statsCards').innerHTML = `
       <div class="card gold"><div class="lbl">Current Balance</div><div class="val">$${bal.toFixed(2)}</div><div class="sub">Started $${startingBalance.toFixed(2)}</div></div>
@@ -507,10 +541,10 @@ async function loadStats() {
       <div class="card"><div class="lbl">Best Trade</div><div class="val pos">+$${sm.best_trade||0}</div></div>
     `;
 
-    const sRows = (s.sessions||[]).map(x=>`<tr><td>${x.session}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const pRows = (s.pairs||[]).map(x=>`<tr><td><strong>${x.pair}</strong></td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const stRows = (s.strategies||[]).map(x=>`<tr><td>${x.strategy}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const extra = `
+    const sRows  = (s.sessions   || []).map(x => `<tr><td>${x.session}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')  || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const pRows  = (s.pairs      || []).map(x => `<tr><td><strong>${x.pair}</strong></td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const stRows = (s.strategies || []).map(x => `<tr><td>${x.strategy}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const extra  = `
       <tr><td>Avg Win</td><td style="color:var(--green)">+$${sm.avg_win||0}</td></tr>
       <tr><td>Avg Loss</td><td style="color:var(--red)">$${sm.avg_loss||0}</td></tr>
       <tr><td>Worst Trade</td><td style="color:var(--red)">$${sm.worst_trade||0}</td></tr>
@@ -536,68 +570,72 @@ async function loadStats() {
 
 // ── Photos ────────────────────────────────────────────────────────────────
 function handlePhoto(input, type) {
-  const file = input.files[0]; if(!file) return;
+  const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
       const c = document.createElement('canvas');
-      const MAX=900; let w=img.width, h=img.height;
-      if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
-      c.width=w; c.height=h;
-      c.getContext('2d').drawImage(img,0,0,w,h);
-      const data = c.toDataURL('image/jpeg',0.72);
-      photoData[type]=data; showPhotoPreview(type,data);
+      const MAX = 900; let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      const data = c.toDataURL('image/jpeg', 0.72);
+      photoData[type] = data; showPhotoPreview(type, data);
     };
-    img.src=e.target.result;
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 function showPhotoPreview(type, src) {
-  document.getElementById(type+'-preview').src=src;
-  document.getElementById(type+'-preview').style.display='block';
-  document.getElementById(type+'-placeholder').style.display='none';
-  document.getElementById(type+'-remove').style.display='flex';
-  document.getElementById('box-'+type).classList.add('has-img');
+  document.getElementById(type + '-preview').src = src;
+  document.getElementById(type + '-preview').style.display = 'block';
+  document.getElementById(type + '-placeholder').style.display = 'none';
+  document.getElementById(type + '-remove').style.display = 'flex';
+  document.getElementById('box-' + type).classList.add('has-img');
 }
 function removePhoto(type) {
-  photoData[type]=null;
-  document.getElementById(type+'-preview').src='';
-  document.getElementById(type+'-preview').style.display='none';
-  document.getElementById(type+'-placeholder').style.display='block';
-  document.getElementById(type+'-remove').style.display='none';
-  document.getElementById('box-'+type).classList.remove('has-img');
-  document.getElementById('f_'+type).value='';
+  photoData[type] = null;
+  document.getElementById(type + '-preview').src = '';
+  document.getElementById(type + '-preview').style.display = 'none';
+  document.getElementById(type + '-placeholder').style.display = 'block';
+  document.getElementById(type + '-remove').style.display = 'none';
+  document.getElementById('box-' + type).classList.remove('has-img');
+  document.getElementById('f_' + type).value = '';
 }
 function resetPhotos() { removePhoto('before'); removePhoto('after'); }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
 function openLightbox(id, type) {
-  lbTrade = trades.find(t=>t.id===id); if(!lbTrade) return;
-  const src = type==='before' ? lbTrade.photo_before : lbTrade.photo_after;
-  if(!src) return;
-  document.getElementById('lb-img').src=src;
-  document.getElementById('lb-label').textContent=(type==='before'?'Before Entry':'After Exit')+' — '+(lbTrade.pair||'')+' '+(lbTrade.date||'');
+  lbTrade = trades.find(t => t.id === id); if (!lbTrade) return;
+  const src = type === 'before' ? lbTrade.photo_before : lbTrade.photo_after;
+  if (!src) return;
+  document.getElementById('lb-img').src = src;
+  document.getElementById('lb-label').textContent = (type === 'before' ? 'Before Entry' : 'After Exit') + ' — ' + (lbTrade.pair || '') + ' ' + (lbTrade.date || '');
   document.getElementById('lightbox').classList.add('open');
 }
 function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
 function lbNav(type) {
-  if(!lbTrade) return;
-  const src = type==='before'?lbTrade.photo_before:lbTrade.photo_after;
-  if(src){
-    document.getElementById('lb-img').src=src;
-    document.getElementById('lb-label').textContent=(type==='before'?'Before Entry':'After Exit')+' — '+(lbTrade.pair||'')+' '+(lbTrade.date||'');
+  if (!lbTrade) return;
+  const src = type === 'before' ? lbTrade.photo_before : lbTrade.photo_after;
+  if (src) {
+    document.getElementById('lb-img').src = src;
+    document.getElementById('lb-label').textContent = (type === 'before' ? 'Before Entry' : 'After Exit') + ' — ' + (lbTrade.pair || '') + ' ' + (lbTrade.date || '');
   }
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
 function exportCSV() {
-  if(!trades.length){toast('No trades to export');return;}
-  const h=['Date','Pair','Session','Direction','Entry','SL','TP','Exit','Lots','Result','Pips','P&L','RR','Strategy','Notes'];
-  const rows=trades.map(t=>[t.date,t.pair,t.session,t.direction,t.entry_price,t.stop_loss,t.take_profit,t.exit_price,t.lot_size,t.result,t.pips,t.pnl,t.rr_ratio,t.strategy,`"${(t.notes||'').replace(/"/g,'""')}"`].join(','));
-  const a=document.createElement('a');
-  a.href='data:text/csv,'+encodeURIComponent([h.join(','),...rows].join('\\n'));
-  a.download='PM23FX_Trades.csv'; a.click();
+  if (!trades.length) { toast('No trades to export'); return; }
+  const h = ['Date','Pair','Session','Direction','Entry','SL','TP','Exit','Lots','Result','Pips','P&L','RR','Strategy','Notes'];
+  const rows = trades.map(t => [
+    t.date, t.pair, t.session, t.direction, t.entry_price, t.stop_loss, t.take_profit,
+    t.exit_price, t.lot_size, t.result, t.pips, t.pnl, t.rr_ratio, t.strategy,
+    `"${(t.notes || '').replace(/"/g, '""')}"`
+  ].join(','));
+  const a = document.createElement('a');
+  a.href = 'data:text/csv,' + encodeURIComponent([h.join(','), ...rows].join('\n'));
+  a.download = 'PM23FX_Trades.csv'; a.click();
   toast('CSV exported');
 }
 
