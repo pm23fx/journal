@@ -736,7 +736,7 @@ async function loadStats() {
     const extra  = `
       <tr><td>Avg Win</td><td style="color:var(--green)">+$${sm.avg_win||0}</td></tr>
       <tr><td>Avg Loss</td><td style="color:var(--red)">$${sm.avg_loss||0}</td></tr>
-      <tr><td>Worst Trade</td><td style="color:var(--red)">$${sm.worst_trade||0}</td></tr>
+      <tr><td>Worst Trade</td><td class="${parseFloat(sm.worst_trade||0)>=0?'pos':'neg'}">${parseFloat(sm.worst_trade||0)>=0?'+':''}$${sm.worst_trade||0}</td></tr>
       <tr><td>Total Pips</td><td class="${parseFloat(sm.total_pips||0)>=0?'pos':'neg'}">${parseFloat(sm.total_pips||0)>=0?'+':''}${sm.total_pips||0}</td></tr>
     `;
 
