@@ -80,7 +80,7 @@
   .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .stats-block{background:var(--white);border:1px solid var(--lgray);border-radius:10px;overflow:hidden}
   .stats-block-hdr{background:var(--slate);color:var(--white);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px}
-  .stats-block table{width:100%;table-layout:fixed}
+  .stats-block table{width:100%}
   .stats-block td{padding:8px 14px;border-bottom:1px solid var(--lgray);font-size:13px}
   .stats-block tr:last-child td{border-bottom:none}
   .stats-block td:last-child{text-align:right;font-weight:600;font-family:var(--mono);color:var(--navy);min-width:60px}
@@ -105,21 +105,6 @@
   .chart-block.pie-block{display:flex;flex-direction:column;align-items:center}
   .chart-block.pie-block canvas{max-width:260px;max-height:260px;padding:0}
   @media(max-width:600px){
-    .charts-row{grid-template-columns:1fr}
-    .chart-block canvas{max-height:180px}
-    .chart-block.pie-block canvas{max-width:180px;max-height:180px}
-    /* Fix stats table — values showing in right column */
-    .stats-block td:last-child{text-align:right;font-weight:600;font-family:var(--mono);color:var(--navy);white-space:nowrap}
-    .stats-block td:first-child{color:var(--dgray);font-size:12px}
-  }
-  /* Charts */
-  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-  .chart-block{background:var(--white);border:1px solid var(--lgray);border-radius:10px;overflow:hidden;padding-bottom:16px}
-  .chart-hdr{background:var(--slate);color:var(--white);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;margin-bottom:8px}
-  .chart-wrap{padding:0 14px}
-  .no-data-chart{text-align:center;padding:40px 0;color:var(--mgray);font-size:12px}
-    @media(max-width:600px){
-    .charts-row{grid-template-columns:1fr}
     html{font-size:13px}
     /* Topbar */
     .topbar{padding:0 12px;height:auto;min-height:52px;flex-wrap:wrap;gap:6px;padding-top:8px;padding-bottom:8px}
@@ -127,7 +112,7 @@
     .logo{font-size:14px}
     .badge{display:none}
     .sync-label{font-size:10px}
-    .topbar .btn-outline{display:none} /* hide Export CSV on mobile to save space */
+    .topbar .btn-outline{display:none}
     .topbar .btn-primary{font-size:12px;padding:6px 10px}
     /* Tabs */
     .tabs{margin:10px 12px 0;padding:3px}
@@ -141,14 +126,17 @@
     .form-box{padding:14px 12px}
     .form-grid{grid-template-columns:1fr 1fr}
     .form-grid.wide{grid-template-columns:1fr}
-    /* Photo row */
     .photo-row{grid-template-columns:1fr 1fr}
-    /* Stats */
+    /* Stats grid — single column */
     .stats-grid{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr;gap:8px}
     .card{padding:12px 14px}
     .card .val{font-size:18px}
-    /* Table — horizontal scroll with fixed min widths */
+    /* Stats tables — remove fixed layout so columns size naturally */
+    .stats-block table{table-layout:auto}
+    .stats-block td{padding:8px 10px;font-size:12px}
+    .stats-block td:last-child{white-space:nowrap;min-width:auto}
+    /* Trade table */
     .table-wrap{border-radius:8px;-webkit-overflow-scrolling:touch}
     table{font-size:11.5px;min-width:900px}
     thead th{padding:8px 8px;font-size:10px}
@@ -156,6 +144,10 @@
     /* Form actions */
     .form-actions{flex-direction:column}
     .form-actions .btn{width:100%;justify-content:center}
+    /* Charts */
+    .charts-row{grid-template-columns:1fr}
+    .chart-block canvas{max-height:180px}
+    .chart-block.pie-block canvas{max-width:180px;max-height:180px}
   }
 </style>
 </head>
