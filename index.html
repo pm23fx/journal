@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PM23FX — Trade Journal</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
     --navy:#0D1B2A; --slate:#1B2A3B; --gold:#C9A84C; --gold-l:#F5EDD6; --gold-d:#9A7A2E;
@@ -36,7 +37,7 @@
   .card .sub{font-size:11px;color:var(--dgray);margin-top:4px}
   .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:var(--font)}
   .btn-primary{background:var(--gold);color:var(--navy)} .btn-primary:hover{background:var(--gold-d)}
-  .btn-outline{background:transparent;color:var(--white);border:1px solid var(--mgray)} .btn-outline:hover{background:var(--lgray)}
+  .btn-outline{background:transparent;color:var(--navy);border:1px solid var(--mgray)} .btn-outline:hover{background:var(--lgray)}
   .btn-danger{background:transparent;color:var(--red);border:1px solid #f0b8b8;font-size:12px;padding:5px 10px} .btn-danger:hover{background:var(--red-b)}
   .btn-sm{padding:5px 12px;font-size:12px}
   .form-box{background:var(--white);border:1px solid var(--lgray);border-radius:12px;padding:20px 24px;margin-bottom:20px}
@@ -97,7 +98,49 @@
   .lightbox-close{position:fixed;top:20px;right:24px;color:#fff;font-size:28px;cursor:pointer;background:none;border:none;line-height:1}
   .toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:1000;border-left:3px solid var(--gold)}
   .toast.show{opacity:1;transform:translateY(0)}
-  @media(max-width:600px){.panel{padding:16px}.topbar{padding:0 16px}.tabs{margin:12px 16px 0}.stats-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr 1fr}}
+  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  .chart-block{background:var(--white);border:1px solid var(--lgray);border-radius:10px;overflow:hidden;padding-bottom:16px}
+  .chart-hdr{background:var(--slate);color:var(--white);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;margin-bottom:12px}
+  .chart-block canvas{display:block;width:100%!important;padding:0 14px;box-sizing:border-box}
+  @media(max-width:600px){
+    .charts-row{grid-template-columns:1fr}
+    html{font-size:13px}
+    /* Topbar */
+    .topbar{padding:0 12px;height:auto;min-height:52px;flex-wrap:wrap;gap:6px;padding-top:8px;padding-bottom:8px}
+    .topbar-left{flex-wrap:wrap;gap:6px}
+    .logo{font-size:14px}
+    .badge{display:none}
+    .sync-label{font-size:10px}
+    .topbar .btn-outline{display:none} /* hide Export CSV on mobile to save space */
+    .topbar .btn-primary{font-size:12px;padding:6px 10px}
+    /* Tabs */
+    .tabs{margin:10px 12px 0;padding:3px}
+    .tab{font-size:12px;padding:7px 8px}
+    /* Panel */
+    .panel{padding:12px 12px 40px}
+    /* Balance row */
+    .balance-row{flex-direction:column;align-items:flex-start;gap:6px;padding:10px 12px}
+    .balance-row input{width:100%}
+    /* Form */
+    .form-box{padding:14px 12px}
+    .form-grid{grid-template-columns:1fr 1fr}
+    .form-grid.wide{grid-template-columns:1fr}
+    /* Photo row */
+    .photo-row{grid-template-columns:1fr 1fr}
+    /* Stats */
+    .stats-grid{grid-template-columns:1fr}
+    .cards{grid-template-columns:1fr 1fr;gap:8px}
+    .card{padding:12px 14px}
+    .card .val{font-size:18px}
+    /* Table — horizontal scroll with fixed min widths */
+    .table-wrap{border-radius:8px;-webkit-overflow-scrolling:touch}
+    table{font-size:11.5px;min-width:900px}
+    thead th{padding:8px 8px;font-size:10px}
+    tbody td{padding:7px 8px}
+    /* Form actions */
+    .form-actions{flex-direction:column}
+    .form-actions .btn{width:100%;justify-content:center}
+  }
 </style>
 </head>
 <body>
@@ -105,7 +148,7 @@
 <div class="topbar">
   <div class="topbar-left">
     <div class="logo"><span>PM23FX</span> Trade Journal</div>
-    <div class="badge">QP</div>
+    <div class="badge">ICT / SMC</div>
     <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
       <div class="sync-dot" id="syncDot"></div>
       <span class="sync-label" id="syncLabel">connecting...</span>
@@ -167,7 +210,7 @@
       <div class="field"><label>Strategy</label>
         <select id="f_strategy"><option value="">Select...</option>
           <option>BOS + OTE</option><option>FVG</option><option>OB Entry</option>
-          <option>Breaker Block</option><option>Liquidity Sweep</option><option>QUARTER POINT</option>
+          <option>Breaker Block</option><option>Liquidity Sweep</option><option>CISD</option>
           <option>ICT Killzone</option><option>SMT Divergence</option><option>Other</option>
         </select>
       </div>
@@ -218,6 +261,19 @@
 <!-- STATS PANEL -->
 <div id="panel-stats" class="panel">
   <div class="cards" id="statsCards"><div style="color:var(--dgray);padding:20px">Loading stats...</div></div>
+
+  <!-- Charts Row -->
+  <div class="charts-row" id="chartsRow" style="display:none">
+    <div class="chart-block">
+      <div class="chart-hdr">📈 Balance Growth (Equity Curve)</div>
+      <canvas id="equityChart" height="180"></canvas>
+    </div>
+    <div class="chart-block">
+      <div class="chart-hdr">🥧 Win / Loss / BE</div>
+      <canvas id="pieChart" height="180"></canvas>
+    </div>
+  </div>
+
   <div class="stats-grid" id="statsGrid"></div>
 </div>
 
@@ -563,9 +619,120 @@ async function loadStats() {
       <div class="stats-block"><div class="stats-block-hdr">Pair Performance</div><table>${pRows}</table></div>
       <div class="stats-block"><div class="stats-block-hdr">Strategy Performance</div><table>${stRows}</table></div>
     `;
+
+    // ── Charts ──────────────────────────────────────────────────────────
+    renderCharts(sm);
+
   } catch(e) {
     document.getElementById('statsCards').innerHTML = '<div style="color:var(--dgray);padding:20px">Could not load stats</div>';
   }
+}
+
+// ── Chart instances (destroy before re-render) ────────────────────────────
+let equityChartInst = null;
+let pieChartInst    = null;
+
+function renderCharts(sm) {
+  const sorted = [...trades].reverse(); // oldest first
+  if (!sorted.length) { document.getElementById('chartsRow').style.display = 'none'; return; }
+  document.getElementById('chartsRow').style.display = 'grid';
+
+  // ── Equity curve data ────────────────────────────────────────────────
+  const labels   = ['Start'];
+  const balances = [startingBalance];
+  let running = startingBalance;
+  sorted.forEach((t, i) => {
+    if (t.pnl != null) running += parseFloat(t.pnl);
+    const d = t.date
+      ? new Date(t.date + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short' })
+      : '#' + (i + 1);
+    labels.push(d);
+    balances.push(parseFloat(running.toFixed(2)));
+  });
+
+  const profitable = balances[balances.length - 1] >= startingBalance;
+  const lineColor  = profitable ? '#C9A84C' : '#A32D2D';
+  const fillColor  = profitable ? 'rgba(201,168,76,0.12)' : 'rgba(163,45,45,0.10)';
+
+  // Destroy old instances to avoid canvas reuse error
+  if (equityChartInst) { equityChartInst.destroy(); equityChartInst = null; }
+  if (pieChartInst)    { pieChartInst.destroy();    pieChartInst    = null; }
+
+  // ── Equity Line Chart ────────────────────────────────────────────────
+  const eCtx = document.getElementById('equityChart').getContext('2d');
+  equityChartInst = new Chart(eCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Balance ($)',
+        data: balances,
+        borderColor: lineColor,
+        backgroundColor: fillColor,
+        borderWidth: 2.5,
+        pointRadius: balances.length > 20 ? 0 : 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: lineColor,
+        fill: true,
+        tension: 0.35,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => ' $' + ctx.parsed.y.toFixed(2) }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { font:{ size:10, family:'DM Mono' }, color:'#6B7280', maxRotation:45 },
+          grid:  { color:'#EEF0EC' }
+        },
+        y: {
+          ticks: { font:{ size:10, family:'DM Mono' }, color:'#6B7280',
+                   callback: v => '$' + v.toFixed(0) },
+          grid:  { color:'#EEF0EC' }
+        }
+      }
+    }
+  });
+
+  // ── Doughnut / Pie Chart ─────────────────────────────────────────────
+  const wins   = sm.wins       || 0;
+  const losses = sm.losses     || 0;
+  const bes    = sm.breakevens || 0;
+  const pCtx   = document.getElementById('pieChart').getContext('2d');
+  pieChartInst = new Chart(pCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Wins', 'Losses', 'Breakeven'],
+      datasets: [{
+        data: [wins, losses, bes],
+        backgroundColor: ['#1A6B3C', '#A32D2D', '#6B7280'],
+        borderColor: '#ffffff',
+        borderWidth: 3,
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font:{ size:11, family:'DM Sans' }, color:'#0D1B2A',
+                    padding:16, usePointStyle:true }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed} trade${ctx.parsed !== 1 ? 's' : ''}`
+          }
+        }
+      }
+    }
+  });
 }
 
 // ── Photos ────────────────────────────────────────────────────────────────
