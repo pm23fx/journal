@@ -735,8 +735,8 @@ async function loadStats() {
     const stRows = (s.strategies || []).map(x => `<tr><td>${x.strategy}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
     const extra  = `
       <tr><td>Avg Win</td><td style="color:var(--green)">+$${sm.avg_win||0}</td></tr>
-      <tr><td>Avg Loss</td><td style="color:var(--red)">$${sm.avg_loss||0}</td></tr>
-      <tr><td>Worst Trade</td><td class="${parseFloat(sm.worst_trade||0)>=0?'pos':'neg'}">${parseFloat(sm.worst_trade||0)>=0?'+':''}$${sm.worst_trade||0}</td></tr>
+      <tr><td>Avg Loss</td><td class="${(sm.losses||0) > 0 ? 'neg' : ''}">${(sm.losses||0) > 0 ? '$' + (sm.avg_loss||0) : '—'}</td></tr>
+      <tr><td>Worst Trade</td><td class="${parseFloat(sm.worst_trade||0)>0?'pos':parseFloat(sm.worst_trade||0)<0?'neg':''}">${parseFloat(sm.worst_trade||0)>0?'+':''}$${sm.worst_trade||0}</td></tr>
       <tr><td>Total Pips</td><td class="${parseFloat(sm.total_pips||0)>=0?'pos':'neg'}">${parseFloat(sm.total_pips||0)>=0?'+':''}${sm.total_pips||0}</td></tr>
     `;
 
