@@ -473,6 +473,17 @@ function formatPercent(value, digits = 1) {
   return `${Number(value).toFixed(digits)}%`;
 }
 
+function formatCalendarDayPnl(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  const amount = Number(value);
+  const sign = amount > 0 ? '+' : amount < 0 ? '-' : '';
+  const abs = Math.abs(amount);
+  if (window.innerWidth <= 600) {
+    return `${sign}${abs >= 100 ? abs.toFixed(0) : abs.toFixed(abs >= 10 ? 1 : 2)}`;
+  }
+  return formatMoney(amount, { sign: amount > 0, compact: true });
+}
+
 function getMoveMeta(pair) {
   if ((pair || '').toUpperCase() === 'XAUUSD') {
     return { label: 'Move (pts) — auto', decimals: 0 };
@@ -849,7 +860,7 @@ function renderHomeDashboard() {
     const selectedClass = selectedDate === date ? ' selected' : '';
     return `<button class="day-cell ${state}${selectedClass}" onclick="selectTradeDate('${date}')">
       <div class="day-num">${dayNum}</div>
-      <div class="day-pnl">${info ? formatMoney(pnl, { sign: pnl > 0, compact: true }) : '—'}</div>
+      <div class="day-pnl">${info ? formatCalendarDayPnl(pnl) : '—'}</div>
       <div class="day-sub">${info ? `${info.trades.length} trade${info.trades.length !== 1 ? 's' : ''}` : 'No trades'}</div>
       <div class="day-win">${info && info.trades.length ? formatPercent((info.wins / info.trades.length) * 100, 0) : ''}</div>
     </button>`;
