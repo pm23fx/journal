@@ -15,11 +15,14 @@ CREATE TABLE IF NOT EXISTS trades (
   result        TEXT,
   pips          REAL,
   pnl           REAL,
+  broker_pnl    REAL,
+  pnl_override  INTEGER DEFAULT 0,
   rr_ratio      REAL,
   strategy      TEXT,
   notes         TEXT,
   photo_before  TEXT,   -- base64 JPEG compressed
   photo_after   TEXT,   -- base64 JPEG compressed
+  photo_broker  TEXT,   -- base64 JPEG compressed
   created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
 );
