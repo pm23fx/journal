@@ -110,42 +110,33 @@
     .charts-row{grid-template-columns:1fr}
     .chart-block canvas{max-height:180px}
     .chart-block.pie-block canvas{max-width:180px;max-height:180px}
-    /* Fix stats table — values showing in right column */
     .stats-block td:last-child{text-align:right;font-weight:600;font-family:var(--mono);color:var(--navy);white-space:nowrap}
     .stats-block td:first-child{color:var(--dgray);font-size:12px}
   }
-  /* Charts */
   .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
   .chart-block{background:var(--white);border:1px solid var(--lgray);border-radius:10px;overflow:hidden;padding-bottom:16px}
   .chart-hdr{background:var(--slate);color:var(--white);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;margin-bottom:8px}
   .chart-wrap{padding:0 14px}
   .no-data-chart{text-align:center;padding:40px 0;color:var(--mgray);font-size:12px}
-    @media(max-width:600px){
+  @media(max-width:600px){
     .charts-row{grid-template-columns:1fr}
     html{font-size:13px}
-    /* Topbar */
     .topbar{padding:0 12px;height:auto;min-height:52px;flex-wrap:wrap;gap:6px;padding-top:8px;padding-bottom:8px}
     .topbar-left{flex-wrap:wrap;gap:6px}
     .logo{font-size:14px}
     .badge{display:none}
     .sync-label{font-size:10px}
-    .topbar .btn-outline{display:none} /* hide Export CSV on mobile to save space */
+    .topbar .btn-outline{display:none}
     .topbar .btn-primary{font-size:12px;padding:6px 10px}
-    /* Tabs */
     .tabs{margin:10px 12px 0;padding:3px}
     .tab{font-size:12px;padding:7px 8px}
-    /* Panel */
     .panel{padding:12px 12px 40px}
-    /* Balance row */
     .balance-row{flex-direction:column;align-items:flex-start;gap:6px;padding:10px 12px}
     .balance-row input{width:100%}
-    /* Form */
     .form-box{padding:14px 12px}
     .form-grid{grid-template-columns:1fr 1fr}
     .form-grid.wide{grid-template-columns:1fr}
-    /* Photo row */
     .photo-row{grid-template-columns:1fr 1fr}
-    /* Stats */
     .stats-grid{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr;gap:8px}
     .card{padding:12px 14px}
@@ -154,12 +145,10 @@
     .stats-block td{padding:8px 12px;font-size:12px}
     .stats-block td:first-child{width:58%;white-space:normal;color:var(--dgray)}
     .stats-block td:last-child{width:42%;text-align:right;white-space:nowrap;font-size:12px}
-    /* Table — horizontal scroll with fixed min widths */
     .table-wrap{border-radius:8px;-webkit-overflow-scrolling:touch}
     .table-wrap > table{font-size:11.5px;min-width:900px}
     .table-wrap thead th{padding:8px 8px;font-size:10px}
     .table-wrap tbody td{padding:7px 8px}
-    /* Form actions */
     .form-actions{flex-direction:column}
     .form-actions .btn{width:100%;justify-content:center}
   }
@@ -190,7 +179,11 @@
 <!-- LOG PANEL -->
 <div id="panel-log" class="panel active">
   <div class="balance-row">
-    <label>Starting Balance (QAR)</label>
+    <label>Starting Balance</label>
+    <select id="accountCurrency" onchange="saveSettings()">
+      <option value="QAR">QAR</option>
+      <option value="USD">USD</option>
+    </select>
     <input type="number" id="startBalance" value="102" onchange="saveSettings()">
     <span>Saved to cloud — accessible from any device</span>
   </div>
@@ -284,7 +277,6 @@
 <div id="panel-stats" class="panel">
   <div class="cards" id="statsCards"><div style="color:var(--dgray);padding:20px">Loading stats...</div></div>
 
-  <!-- Charts Row -->
   <div class="charts-row" id="chartsRow" style="display:none">
     <div class="chart-block">
       <div class="chart-hdr">📈 Balance Growth (Equity Curve)</div>
@@ -313,6 +305,7 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────
+// API is same origin (Worker serves both HTML and API)
 const API = '';
 
 let trades = [];
@@ -320,19 +313,19 @@ let editId = null;
 let photoData = { before: null, after: null };
 let lbTrade = null;
 let startingBalance = 500;
-const ACCOUNT_CURRENCY = 'QAR';
-const FX_TO_QAR = {
-  QAR: 1,
-  USD: 3.64,
-  GBP: 4.82,
-  EUR: 3.95,
-  AUD: 2.37,
-  NZD: 2.15,
-  CAD: 2.53,
-  CHF: 4.12
+let accountCurrency = 'QAR';
+const FX_TO_USD = {
+  USD: 1,
+  QAR: 0.274725,
+  GBP: 1.325,
+  EUR: 1.085,
+  AUD: 0.651,
+  NZD: 0.59,
+  CAD: 0.695,
+  CHF: 1.135,
+  JPY: 0.0067
 };
 
-// ── Pip size helper (JPY pairs use 0.01, all others use 0.0001) ───────────
 function getPipSize(pair) {
   if (!pair) return 0.0001;
   return pair.toUpperCase().includes('JPY') ? 0.01 : 0.0001;
@@ -350,12 +343,16 @@ function getContractSize(pair) {
   return pair === 'XAUUSD' ? 100 : 100000;
 }
 
-function getQuoteToQARRate(pair, referencePrice) {
+function getQuoteToAccountRate(pair, referencePrice) {
   const { base, quote } = splitPair(pair);
   if (!quote) return 1;
-  if (quote === ACCOUNT_CURRENCY) return 1;
-  if (FX_TO_QAR[quote]) return FX_TO_QAR[quote];
-  if (base && FX_TO_QAR[base] && referencePrice) return FX_TO_QAR[base] / referencePrice;
+  if (quote === accountCurrency) return 1;
+  const quoteToUsd = FX_TO_USD[quote];
+  const accountToUsd = FX_TO_USD[accountCurrency];
+  if (base && FX_TO_USD[base] && accountToUsd && referencePrice) {
+    return (FX_TO_USD[base] / referencePrice) / accountToUsd;
+  }
+  if (quoteToUsd && accountToUsd) return quoteToUsd / accountToUsd;
   return 1;
 }
 
@@ -365,8 +362,8 @@ function calculateTradePnl(pair, entry, exit, lot, dir) {
   const rawDiff = (exit - entry) * direction;
   const referencePrice = (entry + exit) / 2;
   const contractSize = getContractSize(pair);
-  const quoteToQar = getQuoteToQARRate(pair, referencePrice);
-  return Math.round(rawDiff * lot * contractSize * quoteToQar * 100) / 100;
+  const quoteToAccount = getQuoteToAccountRate(pair, referencePrice);
+  return Math.round(rawDiff * lot * contractSize * quoteToAccount * 100) / 100;
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
@@ -406,7 +403,9 @@ async function init() {
   try {
     const settings = await apiFetch('/api/settings');
     startingBalance = settings.starting_balance || 500;
+    accountCurrency = settings.account_currency || 'QAR';
     document.getElementById('startBalance').value = startingBalance;
+    document.getElementById('accountCurrency').value = accountCurrency;
   } catch(e) {}
   await loadTrades();
 }
@@ -423,9 +422,11 @@ async function loadTrades() {
 
 async function saveSettings() {
   startingBalance = parseFloat(document.getElementById('startBalance').value) || 500;
-  try { await apiFetch('/api/settings', 'PUT', { starting_balance: startingBalance }); }
+  accountCurrency = document.getElementById('accountCurrency').value || 'QAR';
+  try { await apiFetch('/api/settings', 'PUT', { starting_balance: startingBalance, account_currency: accountCurrency }); }
   catch(e) {}
   renderTable();
+  calcLive();
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
@@ -452,7 +453,6 @@ function clearForm() {
   document.getElementById('saveBtn').textContent = 'Save Trade';
 }
 
-// ── Live Calc (JPY-aware) ─────────────────────────────────────────────────
 function calcLive() {
   const pair  = document.getElementById('f_pair').value;
   const entry = parseFloat(document.getElementById('f_entry').value);
@@ -461,9 +461,7 @@ function calcLive() {
   const exit  = parseFloat(document.getElementById('f_exit').value);
   const lot   = parseFloat(document.getElementById('f_lot').value);
   const dir   = document.getElementById('f_dir').value;
-
-  const pipSize  = getPipSize(pair);
-
+  const pipSize = getPipSize(pair);
   if (entry && exit && dir) {
     const rawDiff = dir === 'BUY' ? (exit - entry) : (entry - exit);
     const pips = Math.round((rawDiff / pipSize) * 10) / 10;
@@ -473,51 +471,46 @@ function calcLive() {
       document.getElementById('f_pnl').value = (pnl >= 0 ? '+' : '') + pnl.toFixed(2);
     }
   }
-
   if (entry && sl && tp) {
-    const slD = Math.abs(sl - entry);
-    const tpD = Math.abs(tp - entry);
-    if (slD > 0) document.getElementById('f_rr').value = (Math.round(tpD / slD * 10) / 10).toFixed(1) + 'R';
+    const slD=Math.abs(sl-entry), tpD=Math.abs(tp-entry);
+    if(slD>0) document.getElementById('f_rr').value = (Math.round(tpD/slD*10)/10).toFixed(1)+'R';
   }
 }
 
-// ── Save Trade (JPY-aware) ────────────────────────────────────────────────
 async function saveTrade() {
   const pair = document.getElementById('f_pair').value;
   const date = document.getElementById('f_date').value;
   if (!pair) { toast('Please select a pair'); return; }
 
-  const entry = parseFloat(document.getElementById('f_entry').value) || null;
-  const sl    = parseFloat(document.getElementById('f_sl').value)    || null;
-  const tp    = parseFloat(document.getElementById('f_tp').value)    || null;
-  const exit  = parseFloat(document.getElementById('f_exit').value)  || null;
-  const lot   = parseFloat(document.getElementById('f_lot').value)   || null;
+  const entry = parseFloat(document.getElementById('f_entry').value)||null;
+  const sl    = parseFloat(document.getElementById('f_sl').value)||null;
+  const tp    = parseFloat(document.getElementById('f_tp').value)||null;
+  const exit  = parseFloat(document.getElementById('f_exit').value)||null;
+  const lot   = parseFloat(document.getElementById('f_lot').value)||null;
   const dir   = document.getElementById('f_dir').value;
+  const pipSize = getPipSize(pair);
 
-  const pipSize  = getPipSize(pair);
-
-  let pips = null, pnl = null, rr = null;
+  let pips=null, pnl=null, rr=null;
   if (entry && exit && dir) {
     const rawDiff = dir === 'BUY' ? (exit - entry) : (entry - exit);
     pips = Math.round((rawDiff / pipSize) * 10) / 10;
     if (lot) pnl = calculateTradePnl(pair, entry, exit, lot, dir);
   }
   if (entry && sl && tp) {
-    const slD = Math.abs(sl - entry);
-    const tpD = Math.abs(tp - entry);
-    if (slD > 0) rr = Math.round(tpD / slD * 10) / 10;
+    const slD=Math.abs(sl-entry), tpD=Math.abs(tp-entry);
+    if(slD>0) rr = Math.round(tpD/slD*10)/10;
   }
 
   const payload = {
-    date: date || null, pair,
-    session:   document.getElementById('f_session').value  || null,
-    direction: dir || null,
+    date: date||null, pair,
+    session:   document.getElementById('f_session').value||null,
+    direction: dir||null,
     entry_price: entry, stop_loss: sl, take_profit: tp,
     exit_price: exit, lot_size: lot,
-    result:    document.getElementById('f_result').value   || null,
+    result:    document.getElementById('f_result').value||null,
     pips, pnl, rr_ratio: rr,
-    strategy:  document.getElementById('f_strategy').value || null,
-    notes:     document.getElementById('f_notes').value    || null,
+    strategy:  document.getElementById('f_strategy').value||null,
+    notes:     document.getElementById('f_notes').value||null,
     photo_before: photoData.before,
     photo_after:  photoData.after,
   };
@@ -553,27 +546,27 @@ function editTrade(id) {
   const t = trades.find(t => t.id === id);
   if (!t) return;
   editId = id;
-  document.getElementById('f_date').value     = t.date     || '';
-  document.getElementById('f_pair').value     = t.pair     || '';
-  document.getElementById('f_session').value  = t.session  || '';
-  document.getElementById('f_dir').value      = t.direction|| '';
-  document.getElementById('f_entry').value    = t.entry_price || '';
-  document.getElementById('f_sl').value       = t.stop_loss   || '';
-  document.getElementById('f_tp').value       = t.take_profit || '';
-  document.getElementById('f_exit').value     = t.exit_price  || '';
-  document.getElementById('f_lot').value      = t.lot_size    || '';
-  document.getElementById('f_result').value   = t.result   || '';
-  document.getElementById('f_strategy').value = t.strategy || '';
-  document.getElementById('f_notes').value    = t.notes    || '';
-  document.getElementById('f_pips').value     = t.pips  != null ? t.pips  : '';
-  document.getElementById('f_pnl').value      = t.pnl   != null ? t.pnl   : '';
-  document.getElementById('f_rr').value       = t.rr_ratio != null ? t.rr_ratio + 'R' : '';
+  document.getElementById('f_date').value     = t.date||'';
+  document.getElementById('f_pair').value     = t.pair||'';
+  document.getElementById('f_session').value  = t.session||'';
+  document.getElementById('f_dir').value      = t.direction||'';
+  document.getElementById('f_entry').value    = t.entry_price||'';
+  document.getElementById('f_sl').value       = t.stop_loss||'';
+  document.getElementById('f_tp').value       = t.take_profit||'';
+  document.getElementById('f_exit').value     = t.exit_price||'';
+  document.getElementById('f_lot').value      = t.lot_size||'';
+  document.getElementById('f_result').value   = t.result||'';
+  document.getElementById('f_strategy').value = t.strategy||'';
+  document.getElementById('f_notes').value    = t.notes||'';
+  document.getElementById('f_pips').value     = t.pips!=null ? t.pips : '';
+  document.getElementById('f_pnl').value      = t.pnl!=null  ? t.pnl  : '';
+  document.getElementById('f_rr').value       = t.rr_ratio!=null ? t.rr_ratio+'R' : '';
   document.getElementById('formTitle').textContent = 'Edit Trade';
-  document.getElementById('saveBtn').textContent   = 'Update Trade';
-  if (t.photo_before) { photoData.before = t.photo_before; showPhotoPreview('before', t.photo_before); }
-  if (t.photo_after)  { photoData.after  = t.photo_after;  showPhotoPreview('after',  t.photo_after);  }
+  document.getElementById('saveBtn').textContent = 'Update Trade';
+  if (t.photo_before) { photoData.before=t.photo_before; showPhotoPreview('before',t.photo_before); }
+  if (t.photo_after)  { photoData.after=t.photo_after;   showPhotoPreview('after', t.photo_after);  }
   toggleForm(true);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -583,40 +576,41 @@ function renderTable() {
     tbody.innerHTML = '<tr><td colspan="19"><div class="empty-state"><div class="icon">📋</div><p>No trades yet — click <strong>+ New Trade</strong> to log your first entry</p></div></td></tr>';
     return;
   }
+  // trades come newest-first from API, reverse for display so balance runs correctly
   const display = [...trades].reverse();
   let runBal = startingBalance;
-  const rows = display.map((t, i) => {
-    if (t.pnl != null) runBal += parseFloat(t.pnl);
-    const rc   = t.result === 'Win' ? 'win' : t.result === 'Loss' ? 'loss' : t.result === 'BE' ? 'be' : '';
-    const dc   = (t.direction || '').toLowerCase();
-    const pnlC = t.pnl  > 0 ? 'pos' : t.pnl  < 0 ? 'neg' : '';
-    const pipC = t.pips > 0 ? 'pos' : t.pips < 0 ? 'neg' : '';
-    const fn   = (v, d=2) => v != null && v !== '' ? parseFloat(v).toFixed(d) : '—';
-    const fp   = (v) => v != null ? ((v >= 0 ? '+$' : '-$') + Math.abs(parseFloat(v)).toFixed(2)) : '—';
-    const fps  = (v) => v != null ? ((v >= 0 ? '+' : '') + parseFloat(v).toFixed(1)) : '—';
-    const fdate = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' }) : '—';
+  const rows = display.map((t,i) => {
+    if (t.pnl!=null) runBal += parseFloat(t.pnl);
+    const rc = t.result==='Win'?'win':t.result==='Loss'?'loss':t.result==='BE'?'be':'';
+    const dc = (t.direction||'').toLowerCase();
+    const pnlC = t.pnl>0?'pos':t.pnl<0?'neg':'';
+    const pipC = t.pips>0?'pos':t.pips<0?'neg':'';
+    const fn  = (v,d=2) => v!=null&&v!==''?parseFloat(v).toFixed(d):'—';
+    const fp  = (v) => v!=null?((v>=0?'+$':'-$')+Math.abs(parseFloat(v)).toFixed(2)):'—';
+    const fps = (v) => v!=null?((v>=0?'+':'')+parseFloat(v).toFixed(1)):'—';
+    const fdate = t.date ? new Date(t.date+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
     const thumbs = [
       t.photo_before ? `<img class="photo-thumb" src="${t.photo_before}" title="Before" onclick="openLightbox(${t.id},'before')">` : '',
-      t.photo_after  ? `<img class="photo-thumb" src="${t.photo_after}"  title="After"  onclick="openLightbox(${t.id},'after')">` : '',
+      t.photo_after  ? `<img class="photo-thumb" src="${t.photo_after}"  title="After"  onclick="openLightbox(${t.id},'after')">`  : '',
     ].join('') || '<span style="color:var(--mgray);font-size:11px">—</span>';
     return `<tr class="${rc}">
       <td class="mono" style="color:var(--dgray)">${i+1}</td>
       <td>${fdate}</td>
-      <td><strong>${t.pair || '—'}</strong></td>
-      <td style="color:var(--dgray);font-size:11px">${t.session || '—'}</td>
-      <td><span class="tag ${dc}">${t.direction || '—'}</span></td>
-      <td class="mono">${fn(t.entry_price, 5)}</td>
-      <td class="mono" style="color:var(--red)">${fn(t.stop_loss, 5)}</td>
-      <td class="mono" style="color:var(--green)">${fn(t.take_profit, 5)}</td>
-      <td class="mono">${fn(t.exit_price, 5)}</td>
-      <td class="mono">${fn(t.lot_size, 2)}</td>
-      <td><span class="tag ${t.result ? t.result.toLowerCase() : ''}">${t.result || '—'}</span></td>
+      <td><strong>${t.pair||'—'}</strong></td>
+      <td style="color:var(--dgray);font-size:11px">${t.session||'—'}</td>
+      <td><span class="tag ${dc}">${t.direction||'—'}</span></td>
+      <td class="mono">${fn(t.entry_price,5)}</td>
+      <td class="mono" style="color:var(--red)">${fn(t.stop_loss,5)}</td>
+      <td class="mono" style="color:var(--green)">${fn(t.take_profit,5)}</td>
+      <td class="mono">${fn(t.exit_price,5)}</td>
+      <td class="mono">${fn(t.lot_size,2)}</td>
+      <td><span class="tag ${t.result?t.result.toLowerCase():''}">${t.result||'—'}</span></td>
       <td class="mono ${pipC}">${fps(t.pips)}</td>
       <td class="mono ${pnlC}">${fp(t.pnl)}</td>
       <td class="mono"><strong>$${runBal.toFixed(2)}</strong></td>
-      <td class="mono">${t.rr_ratio != null ? t.rr_ratio + 'R' : '—'}</td>
-      <td style="font-size:11px;color:var(--dgray)">${t.strategy || '—'}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--dgray)" title="${t.notes || ''}">${t.notes || '—'}</td>
+      <td class="mono">${t.rr_ratio!=null?t.rr_ratio+'R':'—'}</td>
+      <td style="font-size:11px;color:var(--dgray)">${t.strategy||'—'}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--dgray)" title="${t.notes||''}">${t.notes||'—'}</td>
       <td>${thumbs}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-outline btn-sm" onclick="editTrade(${t.id})" style="padding:4px 8px;font-size:11px">Edit</button>
@@ -627,143 +621,29 @@ function renderTable() {
   tbody.innerHTML = rows.join('');
 }
 
-
-// ── Canvas Chart Helpers ──────────────────────────────────────────────────
-function drawLineChart(canvasId, noDataId, labels, values, colorPos, colorNeg) {
-  const canvas = document.getElementById(canvasId);
-  const nd = document.getElementById(noDataId);
-  if (!values.length || values.length < 2) { canvas.style.display='none'; nd.style.display='block'; return; }
-  canvas.style.display='block'; nd.style.display='none';
-  const W = canvas.parentElement.clientWidth;
-  canvas.width = W; canvas.height = parseInt(canvas.getAttribute('height'));
-  const ctx = canvas.getContext('2d');
-  const pad = { top:16, right:12, bottom:28, left:44 };
-  const cw = W - pad.left - pad.right, ch = canvas.height - pad.top - pad.bottom;
-  const min = Math.min(...values), max = Math.max(...values);
-  const range = max - min || 1;
-  const toY = v => pad.top + ch - ((v - min) / range) * ch;
-  const toX = i => pad.left + (i / Math.max(values.length - 1, 1)) * cw;
-  ctx.clearRect(0, 0, W, canvas.height);
-  const zy = toY(Math.max(0, min));
-  ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
-  ctx.beginPath(); ctx.moveTo(pad.left, zy); ctx.lineTo(pad.left + cw, zy); ctx.stroke();
-  ctx.setLineDash([]);
-  const lastVal = values[values.length-1];
-  const mainColor = lastVal >= (values[0] || 0) ? colorPos : colorNeg;
-  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
-  grad.addColorStop(0, mainColor + '44'); grad.addColorStop(1, mainColor + '00');
-  ctx.beginPath();
-  ctx.moveTo(toX(0), toY(values[0]));
-  values.forEach((v, i) => { if(i>0) ctx.lineTo(toX(i), toY(v)); });
-  ctx.lineTo(toX(values.length-1), pad.top + ch);
-  ctx.lineTo(toX(0), pad.top + ch);
-  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath(); ctx.strokeStyle = mainColor; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
-  values.forEach((v, i) => i===0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
-  ctx.stroke();
-  [[0, values[0]], [values.length-1, values[values.length-1]]].forEach(([i, v]) => {
-    ctx.beginPath(); ctx.arc(toX(i), toY(v), 4, 0, Math.PI*2); ctx.fillStyle = mainColor; ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(toX(i), toY(v), 2, 0, Math.PI*2); ctx.fill();
-  });
-  ctx.fillStyle = '#6B7280'; ctx.font = '10px DM Mono,monospace'; ctx.textAlign = 'right';
-  [min, max].forEach(v => ctx.fillText(v.toFixed(1), pad.left - 3, toY(v) + 3));
-  ctx.textAlign = 'center'; ctx.font = '9px DM Sans,sans-serif';
-  const lIdx = [0, Math.floor((labels.length-1)/2), labels.length-1];
-  lIdx.forEach(i => { if(labels[i]) ctx.fillText(labels[i], toX(i), pad.top + ch + 16); });
-}
-
-function drawDonutChart(canvasId, noDataId, slices) {
-  const canvas = document.getElementById(canvasId);
-  const nd = document.getElementById(noDataId);
-  const total = slices.reduce((a, s) => a + s.value, 0);
-  if (!total) { canvas.style.display='none'; nd.style.display='block'; return; }
-  canvas.style.display='block'; nd.style.display='none';
-  const W = canvas.parentElement.clientWidth;
-  canvas.width = W; canvas.height = parseInt(canvas.getAttribute('height'));
-  const ctx = canvas.getContext('2d');
-  const cx = W/2, cy = (canvas.height - 24)/2;
-  const r = Math.min(cx, cy) - 8, rIn = r * 0.55;
-  ctx.clearRect(0, 0, W, canvas.height);
-  let angle = -Math.PI/2;
-  slices.forEach(s => {
-    const sweep = (s.value / total) * Math.PI * 2;
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, angle, angle + sweep); ctx.closePath();
-    ctx.fillStyle = s.color; ctx.fill(); angle += sweep;
-  });
-  ctx.beginPath(); ctx.arc(cx, cy, rIn, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
-  ctx.fillStyle = '#0D1B2A'; ctx.font = 'bold 15px DM Mono,monospace'; ctx.textAlign = 'center';
-  ctx.fillText(total, cx, cy + 5);
-  ctx.font = '9px DM Sans,sans-serif'; ctx.fillStyle = '#6B7280'; ctx.fillText('trades', cx, cy + 16);
-  const legendY = canvas.height - 16;
-  const lw = W / slices.filter(s=>s.value>0).length;
-  slices.filter(s=>s.value>0).forEach((s, i) => {
-    const lx = i * lw + 10;
-    ctx.fillStyle = s.color; ctx.fillRect(lx, legendY - 8, 9, 9);
-    ctx.fillStyle = '#374151'; ctx.font = '10px DM Sans,sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText(s.label + ' ' + s.value, lx + 12, legendY);
-  });
-}
-
-function drawBarChart(canvasId, noDataId, labels, values) {
-  const canvas = document.getElementById(canvasId);
-  const nd = document.getElementById(noDataId);
-  if (!labels.length) { canvas.style.display='none'; nd.style.display='block'; return; }
-  canvas.style.display='block'; nd.style.display='none';
-  const W = canvas.parentElement.clientWidth;
-  canvas.width = W; canvas.height = parseInt(canvas.getAttribute('height'));
-  const ctx = canvas.getContext('2d');
-  const pad = { top:20, right:8, bottom:36, left:44 };
-  const cw = W - pad.left - pad.right, ch = canvas.height - pad.top - pad.bottom;
-  const min = Math.min(0, ...values), max = Math.max(0, ...values);
-  const range = max - min || 1;
-  const toY = v => pad.top + ch - ((v - min) / range) * ch;
-  const barW = Math.max(10, (cw / labels.length) * 0.6);
-  const slot = cw / labels.length;
-  ctx.clearRect(0, 0, W, canvas.height);
-  const zy = toY(0);
-  ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(pad.left, zy); ctx.lineTo(pad.left + cw, zy); ctx.stroke();
-  labels.forEach((lbl, i) => {
-    const x = pad.left + i * slot + (slot - barW) / 2;
-    const v = values[i];
-    const barH = Math.max(2, Math.abs(toY(v) - zy));
-    const barY = v >= 0 ? zy - barH : zy;
-    ctx.fillStyle = v >= 0 ? '#1A6B3C' : '#A32D2D';
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, barY, barW, barH, 3); else ctx.rect(x, barY, barW, barH);
-    ctx.fill();
-    ctx.fillStyle = '#374151'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(lbl, x + barW/2, pad.top + ch + 14);
-    ctx.fillStyle = v >= 0 ? '#1A6B3C' : '#A32D2D'; ctx.font = '9px DM Mono,monospace';
-    ctx.fillText((v>=0?'+':'')+v.toFixed(0), x + barW/2, v >= 0 ? barY - 4 : barY + barH + 10);
-  });
-  ctx.fillStyle = '#6B7280'; ctx.font = '10px DM Mono,monospace'; ctx.textAlign = 'right';
-  [min, max].forEach(v => ctx.fillText(v.toFixed(0), pad.left - 3, toY(v) + 3));
-}
-
 // ── Stats ─────────────────────────────────────────────────────────────────
 async function loadStats() {
   try {
     const s = await apiFetch('/api/stats');
     const sm = s.summary || {};
-    const bal = startingBalance + (parseFloat(sm.total_pnl) || 0);
-    const wr  = sm.total_trades > 0 ? (sm.wins / sm.total_trades * 100).toFixed(1) : 0;
-    const ret = startingBalance > 0 ? ((parseFloat(sm.total_pnl) || 0) / startingBalance * 100).toFixed(2) : 0;
-    const pnl = parseFloat(sm.total_pnl) || 0;
+    const bal = startingBalance + (parseFloat(sm.total_pnl)||0);
+    const wr  = sm.total_trades>0 ? (sm.wins/sm.total_trades*100).toFixed(1) : 0;
+    const ret = startingBalance>0 ? ((parseFloat(sm.total_pnl)||0)/startingBalance*100).toFixed(2) : 0;
+    const pnl = parseFloat(sm.total_pnl)||0;
 
     document.getElementById('statsCards').innerHTML = `
       <div class="card gold"><div class="lbl">Current Balance</div><div class="val">$${bal.toFixed(2)}</div><div class="sub">Started $${startingBalance.toFixed(2)}</div></div>
-      <div class="card"><div class="lbl">Total P&L</div><div class="val ${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}\$${pnl.toFixed(2)}</div><div class="sub">${ret>=0?'+':''}${ret}% return</div></div>
+      <div class="card"><div class="lbl">Total P&L</div><div class="val ${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</div><div class="sub">${ret>=0?'+':''}${ret}% return</div></div>
       <div class="card"><div class="lbl">Win Rate</div><div class="val ${wr>=50?'pos':'neg'}">${wr}%</div><div class="sub">${sm.wins||0}W / ${sm.losses||0}L / ${sm.breakevens||0}BE</div></div>
       <div class="card"><div class="lbl">Total Trades</div><div class="val">${sm.total_trades||0}</div><div class="sub">${parseFloat(sm.total_pips||0)>=0?'+':''}${parseFloat(sm.total_pips||0).toFixed(1)} pips</div></div>
       <div class="card"><div class="lbl">Avg R:R</div><div class="val">${sm.avg_rr||'—'}R</div><div class="sub">per trade</div></div>
       <div class="card"><div class="lbl">Best Trade</div><div class="val pos">+$${sm.best_trade||0}</div></div>
     `;
 
-    const sRows  = (s.sessions   || []).map(x => `<tr><td>${x.session}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')  || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const pRows  = (s.pairs      || []).map(x => `<tr><td><strong>${x.pair}</strong></td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const stRows = (s.strategies || []).map(x => `<tr><td>${x.strategy}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
-    const extra  = `
+    const sRows = (s.sessions||[]).map(x=>`<tr><td>${x.session}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const pRows = (s.pairs||[]).map(x=>`<tr><td><strong>${x.pair}</strong></td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const stRows = (s.strategies||[]).map(x=>`<tr><td>${x.strategy}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
+    const extra = `
       <tr><td>Avg Win</td><td style="color:var(--green)">+$${sm.avg_win||0}</td></tr>
       <tr><td>Avg Loss</td><td class="${(sm.losses||0) > 0 ? 'neg' : ''}">${(sm.losses||0) > 0 ? '$' + (sm.avg_loss||0) : '—'}</td></tr>
       <tr><td>Worst Trade</td><td class="${parseFloat(sm.worst_trade||0)>0?'pos':parseFloat(sm.worst_trade||0)<0?'neg':''}">${parseFloat(sm.worst_trade||0)>0?'+':''}$${sm.worst_trade||0}</td></tr>
@@ -783,25 +663,21 @@ async function loadStats() {
       <div class="stats-block"><div class="stats-block-hdr">Strategy Performance</div><table>${stRows}</table></div>
     `;
 
-    // ── Charts ──────────────────────────────────────────────────────────
     renderCharts(sm);
-
   } catch(e) {
     document.getElementById('statsCards').innerHTML = '<div style="color:var(--dgray);padding:20px">Could not load stats</div>';
   }
 }
 
-// ── Chart instances (destroy before re-render) ────────────────────────────
 let equityChartInst = null;
-let pieChartInst    = null;
+let pieChartInst = null;
 
 function renderCharts(sm) {
-  const sorted = [...trades].reverse(); // oldest first
+  const sorted = [...trades].reverse();
   if (!sorted.length) { document.getElementById('chartsRow').style.display = 'none'; return; }
   document.getElementById('chartsRow').style.display = 'grid';
 
-  // ── Equity curve data ────────────────────────────────────────────────
-  const labels   = ['Start'];
+  const labels = ['Start'];
   const balances = [startingBalance];
   let running = startingBalance;
   sorted.forEach((t, i) => {
@@ -814,14 +690,12 @@ function renderCharts(sm) {
   });
 
   const profitable = balances[balances.length - 1] >= startingBalance;
-  const lineColor  = profitable ? '#C9A84C' : '#A32D2D';
-  const fillColor  = profitable ? 'rgba(201,168,76,0.12)' : 'rgba(163,45,45,0.10)';
+  const lineColor = profitable ? '#C9A84C' : '#A32D2D';
+  const fillColor = profitable ? 'rgba(201,168,76,0.12)' : 'rgba(163,45,45,0.10)';
 
-  // Destroy old instances to avoid canvas reuse error
   if (equityChartInst) { equityChartInst.destroy(); equityChartInst = null; }
-  if (pieChartInst)    { pieChartInst.destroy();    pieChartInst    = null; }
+  if (pieChartInst) { pieChartInst.destroy(); pieChartInst = null; }
 
-  // ── Equity Line Chart ────────────────────────────────────────────────
   const eCtx = document.getElementById('equityChart').getContext('2d');
   equityChartInst = new Chart(eCtx, {
     type: 'line',
@@ -851,22 +725,24 @@ function renderCharts(sm) {
       scales: {
         x: {
           ticks: { font:{ size:10, family:'DM Mono' }, color:'#6B7280', maxRotation:45 },
-          grid:  { color:'#EEF0EC' }
+          grid: { color:'#EEF0EC' }
         },
         y: {
-          ticks: { font:{ size:10, family:'DM Mono' }, color:'#6B7280',
-                   callback: v => '$' + v.toFixed(0) },
-          grid:  { color:'#EEF0EC' }
+          ticks: {
+            font:{ size:10, family:'DM Mono' },
+            color:'#6B7280',
+            callback: v => '$' + v.toFixed(0)
+          },
+          grid: { color:'#EEF0EC' }
         }
       }
     }
   });
 
-  // ── Doughnut / Pie Chart ─────────────────────────────────────────────
-  const wins   = sm.wins       || 0;
-  const losses = sm.losses     || 0;
-  const bes    = sm.breakevens || 0;
-  const pCtx   = document.getElementById('pieChart').getContext('2d');
+  const wins = sm.wins || 0;
+  const losses = sm.losses || 0;
+  const bes = sm.breakevens || 0;
+  const pCtx = document.getElementById('pieChart').getContext('2d');
   pieChartInst = new Chart(pCtx, {
     type: 'doughnut',
     data: {
@@ -886,8 +762,12 @@ function renderCharts(sm) {
       plugins: {
         legend: {
           position: 'bottom',
-          labels: { font:{ size:11, family:'DM Sans' }, color:'#0D1B2A',
-                    padding:16, usePointStyle:true }
+          labels: {
+            font:{ size:11, family:'DM Sans' },
+            color:'#0D1B2A',
+            padding:16,
+            usePointStyle:true
+          }
         },
         tooltip: {
           callbacks: {
@@ -901,72 +781,68 @@ function renderCharts(sm) {
 
 // ── Photos ────────────────────────────────────────────────────────────────
 function handlePhoto(input, type) {
-  const file = input.files[0]; if (!file) return;
+  const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
       const c = document.createElement('canvas');
-      const MAX = 900; let w = img.width, h = img.height;
-      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      const data = c.toDataURL('image/jpeg', 0.72);
-      photoData[type] = data; showPhotoPreview(type, data);
+      const MAX=900; let w=img.width, h=img.height;
+      if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+      c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      const data = c.toDataURL('image/jpeg',0.72);
+      photoData[type]=data; showPhotoPreview(type,data);
     };
-    img.src = e.target.result;
+    img.src=e.target.result;
   };
   reader.readAsDataURL(file);
 }
 function showPhotoPreview(type, src) {
-  document.getElementById(type + '-preview').src = src;
-  document.getElementById(type + '-preview').style.display = 'block';
-  document.getElementById(type + '-placeholder').style.display = 'none';
-  document.getElementById(type + '-remove').style.display = 'flex';
-  document.getElementById('box-' + type).classList.add('has-img');
+  document.getElementById(type+'-preview').src=src;
+  document.getElementById(type+'-preview').style.display='block';
+  document.getElementById(type+'-placeholder').style.display='none';
+  document.getElementById(type+'-remove').style.display='flex';
+  document.getElementById('box-'+type).classList.add('has-img');
 }
 function removePhoto(type) {
-  photoData[type] = null;
-  document.getElementById(type + '-preview').src = '';
-  document.getElementById(type + '-preview').style.display = 'none';
-  document.getElementById(type + '-placeholder').style.display = 'block';
-  document.getElementById(type + '-remove').style.display = 'none';
-  document.getElementById('box-' + type).classList.remove('has-img');
-  document.getElementById('f_' + type).value = '';
+  photoData[type]=null;
+  document.getElementById(type+'-preview').src='';
+  document.getElementById(type+'-preview').style.display='none';
+  document.getElementById(type+'-placeholder').style.display='block';
+  document.getElementById(type+'-remove').style.display='none';
+  document.getElementById('box-'+type).classList.remove('has-img');
+  document.getElementById('f_'+type).value='';
 }
 function resetPhotos() { removePhoto('before'); removePhoto('after'); }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
 function openLightbox(id, type) {
-  lbTrade = trades.find(t => t.id === id); if (!lbTrade) return;
-  const src = type === 'before' ? lbTrade.photo_before : lbTrade.photo_after;
-  if (!src) return;
-  document.getElementById('lb-img').src = src;
-  document.getElementById('lb-label').textContent = (type === 'before' ? 'Before Entry' : 'After Exit') + ' — ' + (lbTrade.pair || '') + ' ' + (lbTrade.date || '');
+  lbTrade = trades.find(t=>t.id===id); if(!lbTrade) return;
+  const src = type==='before' ? lbTrade.photo_before : lbTrade.photo_after;
+  if(!src) return;
+  document.getElementById('lb-img').src=src;
+  document.getElementById('lb-label').textContent=(type==='before'?'Before Entry':'After Exit')+' — '+(lbTrade.pair||'')+' '+(lbTrade.date||'');
   document.getElementById('lightbox').classList.add('open');
 }
 function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
 function lbNav(type) {
-  if (!lbTrade) return;
-  const src = type === 'before' ? lbTrade.photo_before : lbTrade.photo_after;
-  if (src) {
-    document.getElementById('lb-img').src = src;
-    document.getElementById('lb-label').textContent = (type === 'before' ? 'Before Entry' : 'After Exit') + ' — ' + (lbTrade.pair || '') + ' ' + (lbTrade.date || '');
+  if(!lbTrade) return;
+  const src = type==='before'?lbTrade.photo_before:lbTrade.photo_after;
+  if(src){
+    document.getElementById('lb-img').src=src;
+    document.getElementById('lb-label').textContent=(type==='before'?'Before Entry':'After Exit')+' — '+(lbTrade.pair||'')+' '+(lbTrade.date||'');
   }
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
 function exportCSV() {
-  if (!trades.length) { toast('No trades to export'); return; }
-  const h = ['Date','Pair','Session','Direction','Entry','SL','TP','Exit','Lots','Result','Pips','P&L','RR','Strategy','Notes'];
-  const rows = trades.map(t => [
-    t.date, t.pair, t.session, t.direction, t.entry_price, t.stop_loss, t.take_profit,
-    t.exit_price, t.lot_size, t.result, t.pips, t.pnl, t.rr_ratio, t.strategy,
-    `"${(t.notes || '').replace(/"/g, '""')}"`
-  ].join(','));
-  const a = document.createElement('a');
-  a.href = 'data:text/csv,' + encodeURIComponent([h.join(','), ...rows].join('\n'));
-  a.download = 'PM23FX_Trades.csv'; a.click();
+  if(!trades.length){toast('No trades to export');return;}
+  const h=['Date','Pair','Session','Direction','Entry','SL','TP','Exit','Lots','Result','Pips','P&L','RR','Strategy','Notes'];
+  const rows=trades.map(t=>[t.date,t.pair,t.session,t.direction,t.entry_price,t.stop_loss,t.take_profit,t.exit_price,t.lot_size,t.result,t.pips,t.pnl,t.rr_ratio,t.strategy,`"${(t.notes||'').replace(/"/g,'""')}"`].join(','));
+  const a=document.createElement('a');
+  a.href='data:text/csv,'+encodeURIComponent([h.join(','),...rows].join('\\n'));
+  a.download='PM23FX_Trades.csv'; a.click();
   toast('CSV exported');
 }
 
