@@ -37,7 +37,7 @@
   .card .sub{font-size:11px;color:var(--dgray);margin-top:4px}
   .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:var(--font)}
   .btn-primary{background:var(--gold);color:var(--navy)} .btn-primary:hover{background:var(--gold-d)}
-  .btn-outline{background:transparent;color:var(--navy);border:1px solid var(--mgray)} .btn-outline:hover{background:var(--lgray)}
+  .btn-outline{background:transparent;color:var(--white);border:1px solid var(--mgray)} .btn-outline:hover{background:var(--lgray)}
   .btn-danger{background:transparent;color:var(--red);border:1px solid #f0b8b8;font-size:12px;padding:5px 10px} .btn-danger:hover{background:var(--red-b)}
   .btn-sm{padding:5px 12px;font-size:12px}
   .form-box{background:var(--white);border:1px solid var(--lgray);border-radius:12px;padding:20px 24px;margin-bottom:20px}
@@ -80,10 +80,12 @@
   .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .stats-block{background:var(--white);border:1px solid var(--lgray);border-radius:10px;overflow:hidden}
   .stats-block-hdr{background:var(--slate);color:var(--white);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px}
-  .stats-block table{width:100%}
+  .stats-block table{width:100%;table-layout:fixed}
   .stats-block td{padding:8px 14px;border-bottom:1px solid var(--lgray);font-size:13px}
   .stats-block tr:last-child td{border-bottom:none}
   .stats-block td:last-child{text-align:right;font-weight:600;font-family:var(--mono);color:var(--navy);min-width:60px}
+  .stats-block td:last-child.pos{color:var(--green)}
+  .stats-block td:last-child.neg{color:var(--red)}
   .balance-row{display:flex;align-items:center;gap:10px;background:var(--gold-l);border:1px solid var(--gold);border-radius:8px;padding:10px 16px;margin-bottom:20px;flex-wrap:wrap}
   .balance-row label{font-size:12px;font-weight:600;color:var(--gold-d);white-space:nowrap}
   .balance-row input{border:1px solid var(--gold);border-radius:6px;padding:6px 10px;font-family:var(--mono);font-size:14px;font-weight:600;color:var(--navy);background:var(--white);width:140px;outline:none}
@@ -105,6 +107,21 @@
   .chart-block.pie-block{display:flex;flex-direction:column;align-items:center}
   .chart-block.pie-block canvas{max-width:260px;max-height:260px;padding:0}
   @media(max-width:600px){
+    .charts-row{grid-template-columns:1fr}
+    .chart-block canvas{max-height:180px}
+    .chart-block.pie-block canvas{max-width:180px;max-height:180px}
+    /* Fix stats table — values showing in right column */
+    .stats-block td:last-child{text-align:right;font-weight:600;font-family:var(--mono);color:var(--navy);white-space:nowrap}
+    .stats-block td:first-child{color:var(--dgray);font-size:12px}
+  }
+  /* Charts */
+  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  .chart-block{background:var(--white);border:1px solid var(--lgray);border-radius:10px;overflow:hidden;padding-bottom:16px}
+  .chart-hdr{background:var(--slate);color:var(--white);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;margin-bottom:8px}
+  .chart-wrap{padding:0 14px}
+  .no-data-chart{text-align:center;padding:40px 0;color:var(--mgray);font-size:12px}
+    @media(max-width:600px){
+    .charts-row{grid-template-columns:1fr}
     html{font-size:13px}
     /* Topbar */
     .topbar{padding:0 12px;height:auto;min-height:52px;flex-wrap:wrap;gap:6px;padding-top:8px;padding-bottom:8px}
@@ -112,7 +129,7 @@
     .logo{font-size:14px}
     .badge{display:none}
     .sync-label{font-size:10px}
-    .topbar .btn-outline{display:none}
+    .topbar .btn-outline{display:none} /* hide Export CSV on mobile to save space */
     .topbar .btn-primary{font-size:12px;padding:6px 10px}
     /* Tabs */
     .tabs{margin:10px 12px 0;padding:3px}
@@ -126,28 +143,25 @@
     .form-box{padding:14px 12px}
     .form-grid{grid-template-columns:1fr 1fr}
     .form-grid.wide{grid-template-columns:1fr}
+    /* Photo row */
     .photo-row{grid-template-columns:1fr 1fr}
-    /* Stats grid — single column */
+    /* Stats */
     .stats-grid{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr;gap:8px}
     .card{padding:12px 14px}
     .card .val{font-size:18px}
-    /* Stats tables — remove fixed layout so columns size naturally */
-    .stats-block table{table-layout:auto}
-    .stats-block td{padding:8px 10px;font-size:12px}
-    .stats-block td:last-child{white-space:nowrap;min-width:auto}
-    /* Trade table */
+    .stats-block table{width:100%;min-width:0;table-layout:fixed}
+    .stats-block td{padding:8px 12px;font-size:12px}
+    .stats-block td:first-child{width:58%;white-space:normal;color:var(--dgray)}
+    .stats-block td:last-child{width:42%;text-align:right;white-space:nowrap;font-size:12px}
+    /* Table — horizontal scroll with fixed min widths */
     .table-wrap{border-radius:8px;-webkit-overflow-scrolling:touch}
-    table{font-size:11.5px;min-width:900px}
-    thead th{padding:8px 8px;font-size:10px}
-    tbody td{padding:7px 8px}
+    .table-wrap > table{font-size:11.5px;min-width:900px}
+    .table-wrap thead th{padding:8px 8px;font-size:10px}
+    .table-wrap tbody td{padding:7px 8px}
     /* Form actions */
     .form-actions{flex-direction:column}
     .form-actions .btn{width:100%;justify-content:center}
-    /* Charts */
-    .charts-row{grid-template-columns:1fr}
-    .chart-block canvas{max-height:180px}
-    .chart-block.pie-block canvas{max-width:180px;max-height:180px}
   }
 </style>
 </head>
@@ -156,7 +170,7 @@
 <div class="topbar">
   <div class="topbar-left">
     <div class="logo"><span>PM23FX</span> Trade Journal</div>
-    <div class="badge">ICT / SMC</div>
+    <div class="badge">QP</div>
     <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
       <div class="sync-dot" id="syncDot"></div>
       <span class="sync-label" id="syncLabel">connecting...</span>
@@ -177,7 +191,7 @@
 <div id="panel-log" class="panel active">
   <div class="balance-row">
     <label>Starting Balance (QAR)</label>
-    <input type="number" id="startBalance" value="500" onchange="saveSettings()">
+    <input type="number" id="startBalance" value="102" onchange="saveSettings()">
     <span>Saved to cloud — accessible from any device</span>
   </div>
 
@@ -213,11 +227,11 @@
         <select id="f_result"><option value="">Select...</option><option>Win</option><option>Loss</option><option>BE</option></select>
       </div>
       <div class="field"><label>P&amp;L (pips) — auto</label><input id="f_pips" class="calc-val" readonly placeholder="auto"></div>
-      <div class="field"><label>P&amp;L ($) — enter MT5 value</label><input type="number" id="f_pnl" step="0.01" placeholder="e.g. 20.19" style="background:var(--white);border-color:var(--gold)" oninput="this.dataset.userEdited='1'"></div>
+      <div class="field"><label>P&amp;L — auto</label><input id="f_pnl" class="calc-val" readonly placeholder="auto"></div>
       <div class="field"><label>R:R Ratio — auto</label><input id="f_rr" class="calc-val" readonly placeholder="auto"></div>
       <div class="field"><label>Strategy</label>
         <select id="f_strategy"><option value="">Select...</option>
-          <option>BOS + OTE</option><option>FVG</option><option>OB Entry</option>
+          <option>QUARTER POINT</option><option>FVG</option><option>OB Entry</option>
           <option>Breaker Block</option><option>Liquidity Sweep</option><option>CISD</option>
           <option>ICT Killzone</option><option>SMT Divergence</option><option>Other</option>
         </select>
@@ -306,6 +320,17 @@ let editId = null;
 let photoData = { before: null, after: null };
 let lbTrade = null;
 let startingBalance = 500;
+const ACCOUNT_CURRENCY = 'QAR';
+const FX_TO_QAR = {
+  QAR: 1,
+  USD: 3.64,
+  GBP: 4.82,
+  EUR: 3.95,
+  AUD: 2.37,
+  NZD: 2.15,
+  CAD: 2.53,
+  CHF: 4.12
+};
 
 // ── Pip size helper (JPY pairs use 0.01, all others use 0.0001) ───────────
 function getPipSize(pair) {
@@ -313,15 +338,35 @@ function getPipSize(pair) {
   return pair.toUpperCase().includes('JPY') ? 0.01 : 0.0001;
 }
 
-// ── Pip value per lot helper ──────────────────────────────────────────────
-// For JPY pairs: 1 pip = ~$9.09 per standard lot (approx 1000/rate, simplified to 1000/110)
-// We keep it simple: standard pip value per lot
-// Non-JPY: 1 pip = $10 per standard lot
-// JPY: 1 pip = ~$9 per standard lot (approximate; exact = 1000/current_rate)
-// For journal purposes we use $9 as a reasonable constant for JPY pairs
-function getPipValue(pair) {
-  if (!pair) return 10;
-  return pair.toUpperCase().includes('JPY') ? 9 : 10;
+function splitPair(pair) {
+  if (!pair || pair.length < 6) return { base: '', quote: '' };
+  return {
+    base: pair.slice(0, 3).toUpperCase(),
+    quote: pair.slice(3, 6).toUpperCase()
+  };
+}
+
+function getContractSize(pair) {
+  return pair === 'XAUUSD' ? 100 : 100000;
+}
+
+function getQuoteToQARRate(pair, referencePrice) {
+  const { base, quote } = splitPair(pair);
+  if (!quote) return 1;
+  if (quote === ACCOUNT_CURRENCY) return 1;
+  if (FX_TO_QAR[quote]) return FX_TO_QAR[quote];
+  if (base && FX_TO_QAR[base] && referencePrice) return FX_TO_QAR[base] / referencePrice;
+  return 1;
+}
+
+function calculateTradePnl(pair, entry, exit, lot, dir) {
+  if (!pair || !entry || !exit || !lot || !dir) return null;
+  const direction = dir === 'BUY' ? 1 : -1;
+  const rawDiff = (exit - entry) * direction;
+  const referencePrice = (entry + exit) / 2;
+  const contractSize = getContractSize(pair);
+  const quoteToQar = getQuoteToQARRate(pair, referencePrice);
+  return Math.round(rawDiff * lot * contractSize * quoteToQar * 100) / 100;
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
@@ -403,7 +448,6 @@ function clearForm() {
   ['f_date','f_pair','f_session','f_dir','f_entry','f_sl','f_tp','f_exit',
    'f_lot','f_result','f_pips','f_pnl','f_rr','f_strategy','f_notes']
   .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-  delete document.getElementById('f_pnl').dataset.userEdited;
   document.getElementById('formTitle').textContent = 'New Trade Entry';
   document.getElementById('saveBtn').textContent = 'Save Trade';
 }
@@ -419,17 +463,14 @@ function calcLive() {
   const dir   = document.getElementById('f_dir').value;
 
   const pipSize  = getPipSize(pair);
-  const pipValue = getPipValue(pair);
 
   if (entry && exit && dir) {
     const rawDiff = dir === 'BUY' ? (exit - entry) : (entry - exit);
     const pips = Math.round((rawDiff / pipSize) * 10) / 10;
     document.getElementById('f_pips').value = pips.toFixed(1);
-    // Only auto-suggest P&L if user hasn't manually typed their own value
-    const pnlField = document.getElementById('f_pnl');
-    if (lot && !pnlField.dataset.userEdited) {
-      const pnl = Math.round(pips * lot * pipValue * 100) / 100;
-      pnlField.value = (pnl >= 0 ? '+' : '') + pnl.toFixed(2);
+    if (lot) {
+      const pnl = calculateTradePnl(pair, entry, exit, lot, dir);
+      document.getElementById('f_pnl').value = (pnl >= 0 ? '+' : '') + pnl.toFixed(2);
     }
   }
 
@@ -454,19 +495,12 @@ async function saveTrade() {
   const dir   = document.getElementById('f_dir').value;
 
   const pipSize  = getPipSize(pair);
-  const pipValue = getPipValue(pair);
 
   let pips = null, pnl = null, rr = null;
   if (entry && exit && dir) {
     const rawDiff = dir === 'BUY' ? (exit - entry) : (entry - exit);
     pips = Math.round((rawDiff / pipSize) * 10) / 10;
-  }
-  // Always use whatever is in the P&L field (user-entered MT5 value takes priority)
-  const pnlRaw = document.getElementById('f_pnl').value;
-  if (pnlRaw !== '' && pnlRaw !== null) {
-    pnl = Math.round(parseFloat(pnlRaw) * 100) / 100;
-  } else if (pips !== null && lot) {
-    pnl = Math.round(pips * lot * pipValue * 100) / 100;
+    if (lot) pnl = calculateTradePnl(pair, entry, exit, lot, dir);
   }
   if (entry && sl && tp) {
     const slD = Math.abs(sl - entry);
@@ -533,7 +567,6 @@ function editTrade(id) {
   document.getElementById('f_notes').value    = t.notes    || '';
   document.getElementById('f_pips').value     = t.pips  != null ? t.pips  : '';
   document.getElementById('f_pnl').value      = t.pnl   != null ? t.pnl   : '';
-  delete document.getElementById('f_pnl').dataset.userEdited;
   document.getElementById('f_rr').value       = t.rr_ratio != null ? t.rr_ratio + 'R' : '';
   document.getElementById('formTitle').textContent = 'Edit Trade';
   document.getElementById('saveBtn').textContent   = 'Update Trade';
@@ -731,9 +764,9 @@ async function loadStats() {
     const pRows  = (s.pairs      || []).map(x => `<tr><td><strong>${x.pair}</strong></td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
     const stRows = (s.strategies || []).map(x => `<tr><td>${x.strategy}</td><td>${x.wins}/${x.trades}</td><td class="${x.pnl>=0?'pos':'neg'}">${x.pnl>=0?'+':''}\$${x.pnl}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dgray);padding:16px">No data yet</td></tr>';
     const extra  = `
-      <tr><td>Avg Win</td><td style="color:var(--green)">${(sm.wins||0)>0?'+$'+(sm.avg_win||0):'—'}</td></tr>
-      <tr><td>Avg Loss</td><td style="color:var(--red)">${(sm.losses||0)>0?'$'+(sm.avg_loss||0):'—'}</td></tr>
-      <tr><td>Worst Trade</td><td style="color:var(--red)">${(sm.losses||0)>0?'$'+(sm.worst_trade||0):'—'}</td></tr>
+      <tr><td>Avg Win</td><td style="color:var(--green)">+$${sm.avg_win||0}</td></tr>
+      <tr><td>Avg Loss</td><td class="${(sm.losses||0) > 0 ? 'neg' : ''}">${(sm.losses||0) > 0 ? '$' + (sm.avg_loss||0) : '—'}</td></tr>
+      <tr><td>Worst Trade</td><td class="${parseFloat(sm.worst_trade||0)>0?'pos':parseFloat(sm.worst_trade||0)<0?'neg':''}">${parseFloat(sm.worst_trade||0)>0?'+':''}$${sm.worst_trade||0}</td></tr>
       <tr><td>Total Pips</td><td class="${parseFloat(sm.total_pips||0)>=0?'pos':'neg'}">${parseFloat(sm.total_pips||0)>=0?'+':''}${sm.total_pips||0}</td></tr>
     `;
 
