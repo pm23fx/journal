@@ -157,17 +157,25 @@ export async function onRequest(context) {
 
   // ── GET /api/settings ─────────────────────────────────────────────────
   if (path === '/api/settings' && request.method === 'GET') {
+    try {
+      await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'QAR'").run();
+    } catch (e) {}
     const s = await DB.prepare('SELECT * FROM settings WHERE id=1').first();
-    return json(s || { starting_balance: 500 });
+    return json(s || { starting_balance: 500, account_currency: 'QAR' });
   }
 
   // ── PUT /api/settings ─────────────────────────────────────────────────
   if (path === '/api/settings' && request.method === 'PUT') {
-    const { starting_balance } = await request.json();
+    try {
+      await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'QAR'").run();
+    } catch (e) {}
+    const { starting_balance, account_currency = 'QAR' } = await request.json();
     await DB.prepare(`
-      INSERT INTO settings (id, starting_balance) VALUES (1, ?)
-      ON CONFLICT(id) DO UPDATE SET starting_balance=excluded.starting_balance
-    `).bind(starting_balance).run();
+      INSERT INTO settings (id, starting_balance, account_currency) VALUES (1, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        starting_balance=excluded.starting_balance,
+        account_currency=excluded.account_currency
+    `).bind(starting_balance, account_currency).run();
     return json({ success: true });
   }
 
