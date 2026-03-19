@@ -31,8 +31,20 @@ export async function onRequest(context) {
 
   const DB = env.DB;
 
+  async function ensureTradeColumns() {
+    const alters = [
+      "ALTER TABLE trades ADD COLUMN broker_pnl REAL",
+      "ALTER TABLE trades ADD COLUMN pnl_override INTEGER DEFAULT 0",
+      "ALTER TABLE trades ADD COLUMN photo_broker TEXT"
+    ];
+    for (const sql of alters) {
+      try { await DB.prepare(sql).run(); } catch (e) {}
+    }
+  }
+
   // ── GET /api/trades ───────────────────────────────────────────────────
   if (path === '/api/trades' && request.method === 'GET') {
+    await ensureTradeColumns();
     const { results } = await DB.prepare(
       'SELECT * FROM trades ORDER BY date DESC, id DESC'
     ).all();
@@ -43,6 +55,7 @@ export async function onRequest(context) {
   const tradeMatch = path.match(/^\/api\/trades\/(\d+)$/);
 
   if (tradeMatch && request.method === 'GET') {
+    await ensureTradeColumns();
     const trade = await DB.prepare('SELECT * FROM trades WHERE id = ?')
       .bind(tradeMatch[1]).first();
     if (!trade) return err('Not found', 404);
@@ -51,21 +64,22 @@ export async function onRequest(context) {
 
   // ── POST /api/trades ──────────────────────────────────────────────────
   if (path === '/api/trades' && request.method === 'POST') {
+    await ensureTradeColumns();
     const b = await request.json();
     if (!b.pair) return err('Pair is required');
 
     const r = await DB.prepare(`
       INSERT INTO trades (date, pair, session, direction, entry_price, stop_loss,
-        take_profit, exit_price, lot_size, result, pips, pnl, rr_ratio,
-        strategy, notes, photo_before, photo_after)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        take_profit, exit_price, lot_size, result, pips, pnl, broker_pnl,
+        pnl_override, rr_ratio, strategy, notes, photo_before, photo_after, photo_broker)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(
       b.date||null, b.pair, b.session||null, b.direction||null,
       b.entry_price||null, b.stop_loss||null, b.take_profit||null,
       b.exit_price||null, b.lot_size||null, b.result||null,
-      b.pips||null, b.pnl||null, b.rr_ratio||null,
+      b.pips||null, b.pnl||null, b.broker_pnl||null, b.pnl_override ? 1 : 0, b.rr_ratio||null,
       b.strategy||null, b.notes||null,
-      b.photo_before||null, b.photo_after||null
+      b.photo_before||null, b.photo_after||null, b.photo_broker||null
     ).run();
 
     return json({ id: r.meta.last_row_id, success: true }, 201);
@@ -73,6 +87,7 @@ export async function onRequest(context) {
 
   // ── PUT /api/trades/:id ───────────────────────────────────────────────
   if (tradeMatch && request.method === 'PUT') {
+    await ensureTradeColumns();
     const b = await request.json();
     if (!b.pair) return err('Pair is required');
 
@@ -80,16 +95,16 @@ export async function onRequest(context) {
       UPDATE trades SET
         date=?, pair=?, session=?, direction=?, entry_price=?, stop_loss=?,
         take_profit=?, exit_price=?, lot_size=?, result=?, pips=?, pnl=?,
-        rr_ratio=?, strategy=?, notes=?, photo_before=?, photo_after=?,
+        broker_pnl=?, pnl_override=?, rr_ratio=?, strategy=?, notes=?, photo_before=?, photo_after=?, photo_broker=?,
         updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).bind(
       b.date||null, b.pair, b.session||null, b.direction||null,
       b.entry_price||null, b.stop_loss||null, b.take_profit||null,
       b.exit_price||null, b.lot_size||null, b.result||null,
-      b.pips||null, b.pnl||null, b.rr_ratio||null,
+      b.pips||null, b.pnl||null, b.broker_pnl||null, b.pnl_override ? 1 : 0, b.rr_ratio||null,
       b.strategy||null, b.notes||null,
-      b.photo_before||null, b.photo_after||null,
+      b.photo_before||null, b.photo_after||null, b.photo_broker||null,
       tradeMatch[1]
     ).run();
 
