@@ -8,9 +8,18 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const JOURNAL_TYPE = 'deriv';
-const SETTINGS_ID = 2;
-const DEFAULT_SETTINGS = { starting_balance: 500, account_currency: 'USD' };
+const DEFAULT_SETTINGS = {
+  general: { starting_balance: 500, account_currency: 'QAR' },
+  deriv: { starting_balance: 500, account_currency: 'USD' }
+};
+
+function getJournalType(url) {
+  return url.searchParams.get('journal') === 'deriv' ? 'deriv' : 'general';
+}
+
+function getSettingsId(journalType) {
+  return journalType === 'deriv' ? 2 : 1;
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -34,6 +43,8 @@ export async function onRequest(context) {
   }
 
   const DB = env.DB;
+  const journalType = getJournalType(url);
+  const settingsId = getSettingsId(journalType);
 
   async function ensureTradeColumns() {
     const alters = [
@@ -52,7 +63,7 @@ export async function onRequest(context) {
     await ensureTradeColumns();
     const { results } = await DB.prepare(
       'SELECT * FROM trades WHERE journal_type = ? ORDER BY date DESC, id DESC'
-    ).bind(JOURNAL_TYPE).all();
+    ).bind(journalType).all();
     return json(results);
   }
 
@@ -62,7 +73,7 @@ export async function onRequest(context) {
   if (tradeMatch && request.method === 'GET') {
     await ensureTradeColumns();
     const trade = await DB.prepare('SELECT * FROM trades WHERE id = ? AND journal_type = ?')
-      .bind(tradeMatch[1], JOURNAL_TYPE).first();
+      .bind(tradeMatch[1], journalType).first();
     if (!trade) return err('Not found', 404);
     return json(trade);
   }
@@ -84,7 +95,7 @@ export async function onRequest(context) {
       b.exit_price||null, b.lot_size||null, b.result||null,
       b.pips||null, b.pnl||null, b.broker_pnl||null, b.pnl_override ? 1 : 0, b.rr_ratio||null,
       b.strategy||null, b.notes||null,
-      b.photo_before||null, b.photo_after||null, b.photo_broker||null, JOURNAL_TYPE
+      b.photo_before||null, b.photo_after||null, b.photo_broker||null, journalType
     ).run();
 
     return json({ id: r.meta.last_row_id, success: true }, 201);
@@ -110,7 +121,7 @@ export async function onRequest(context) {
       b.pips||null, b.pnl||null, b.broker_pnl||null, b.pnl_override ? 1 : 0, b.rr_ratio||null,
       b.strategy||null, b.notes||null,
       b.photo_before||null, b.photo_after||null, b.photo_broker||null,
-      JOURNAL_TYPE, tradeMatch[1], JOURNAL_TYPE
+      journalType, tradeMatch[1], journalType
     ).run();
 
     return json({ success: true });
@@ -118,12 +129,13 @@ export async function onRequest(context) {
 
   // ── DELETE /api/trades/:id ────────────────────────────────────────────
   if (tradeMatch && request.method === 'DELETE') {
-    await DB.prepare('DELETE FROM trades WHERE id = ? AND journal_type = ?').bind(tradeMatch[1], JOURNAL_TYPE).run();
+    await DB.prepare('DELETE FROM trades WHERE id = ? AND journal_type = ?').bind(tradeMatch[1], journalType).run();
     return json({ success: true });
   }
 
   // ── GET /api/stats ────────────────────────────────────────────────────
   if (path === '/api/stats' && request.method === 'GET') {
+    await ensureTradeColumns();
     const summary = await DB.prepare(`
       SELECT
         COUNT(*) as total_trades,
@@ -138,7 +150,7 @@ export async function onRequest(context) {
         ROUND(MAX(pnl),2) as best_trade,
         ROUND(MIN(pnl),2) as worst_trade
       FROM trades WHERE journal_type = ?
-    `).bind(JOURNAL_TYPE).first();
+    `).bind(journalType).first();
 
     const sessions = await DB.prepare(`
       SELECT session,
@@ -147,7 +159,7 @@ export async function onRequest(context) {
         ROUND(SUM(pnl),2) as pnl
       FROM trades WHERE journal_type = ? AND session IS NOT NULL
       GROUP BY session ORDER BY trades DESC
-    `).bind(JOURNAL_TYPE).all();
+    `).bind(journalType).all();
 
     const pairs = await DB.prepare(`
       SELECT pair,
@@ -156,7 +168,7 @@ export async function onRequest(context) {
         ROUND(SUM(pnl),2) as pnl
       FROM trades WHERE journal_type = ? AND pair IS NOT NULL
       GROUP BY pair ORDER BY trades DESC LIMIT 10
-    `).bind(JOURNAL_TYPE).all();
+    `).bind(journalType).all();
 
     const strategies = await DB.prepare(`
       SELECT strategy,
@@ -165,7 +177,7 @@ export async function onRequest(context) {
         ROUND(SUM(pnl),2) as pnl
       FROM trades WHERE journal_type = ? AND strategy IS NOT NULL
       GROUP BY strategy ORDER BY trades DESC LIMIT 10
-    `).bind(JOURNAL_TYPE).all();
+    `).bind(journalType).all();
 
     return json({
       summary,
@@ -180,8 +192,8 @@ export async function onRequest(context) {
     try {
       await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'USD'").run();
     } catch (e) {}
-    const s = await DB.prepare('SELECT * FROM settings WHERE id=?').bind(SETTINGS_ID).first();
-    return json(s || DEFAULT_SETTINGS);
+    const s = await DB.prepare('SELECT * FROM settings WHERE id=?').bind(settingsId).first();
+    return json(s || DEFAULT_SETTINGS[journalType]);
   }
 
   // ── PUT /api/settings ─────────────────────────────────────────────────
@@ -189,13 +201,13 @@ export async function onRequest(context) {
     try {
       await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'USD'").run();
     } catch (e) {}
-    const { starting_balance } = await request.json();
+    const { starting_balance, account_currency } = await request.json();
     await DB.prepare(`
       INSERT INTO settings (id, starting_balance, account_currency) VALUES (?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         starting_balance=excluded.starting_balance,
         account_currency=excluded.account_currency
-    `).bind(SETTINGS_ID, starting_balance, 'USD').run();
+    `).bind(settingsId, starting_balance, journalType === 'deriv' ? 'USD' : (account_currency || 'QAR')).run();
     return json({ success: true });
   }
 
