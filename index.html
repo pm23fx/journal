@@ -67,6 +67,9 @@
   .toggle-chip{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--mgray);border-radius:8px;background:var(--off);min-height:38px}
   .toggle-chip input{accent-color:var(--gold)}
   .toggle-chip span{font-size:12px;color:var(--navy);font-weight:500}
+  .journal-switch{display:inline-flex;align-items:center;gap:4px;padding:4px;border:1px solid var(--lgray);border-radius:999px;background:var(--white)}
+  .journal-switch button{border:none;background:transparent;color:var(--dgray);padding:7px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+  .journal-switch button.active{background:var(--navy);color:var(--gold)}
   .field-hint{font-size:11px;color:var(--dgray)}
   .field.is-manual .calc-val{background:var(--white);border-style:solid}
   .photo-row.triple{grid-template-columns:repeat(3,1fr)}
@@ -241,10 +244,18 @@
 <!-- LOG PANEL -->
 <div id="panel-log" class="panel active">
   <div class="balance-row">
+    <label>Journal</label>
+    <div class="journal-switch" id="journalSwitch">
+      <button type="button" id="modeGeneralBtn" class="active" onclick="switchJournal('general')">General</button>
+      <button type="button" id="modeDerivBtn" onclick="switchJournal('deriv')">Deriv</button>
+    </div>
     <label>Starting Balance</label>
-    <div class="month-pill" id="accountCurrencyBadge">USD Only</div>
+    <select id="accountCurrency" onchange="saveSettings()">
+      <option value="QAR">QAR</option>
+      <option value="USD">USD</option>
+    </select>
     <input type="number" id="startBalance" value="102" onchange="saveSettings()">
-    <span>Deriv journal settings are saved separately in the shared cloud database</span>
+    <span id="journalHint">General and Deriv journals share one database but stay separated.</span>
   </div>
 
   <div class="form-box" id="tradeForm" style="display:none">
@@ -383,7 +394,8 @@ let editId = null;
 let photoData = { before: null, after: null, broker: null };
 let lbTrade = null;
 let startingBalance = 500;
-let accountCurrency = 'USD';
+let accountCurrency = 'QAR';
+let activeJournal = 'general';
 let selectedMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedDate = '';
 const FX_TO_USD = {
@@ -397,9 +409,11 @@ const FX_TO_USD = {
   CHF: 1.135,
   JPY: 0.0067
 };
-const JOURNAL_PAIRS = [
+const GENERAL_PAIRS = [
   'GBPJPY', 'USDJPY', 'EURJPY', 'GBPUSD', 'EURUSD',
-  'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY', 'XAUUSD',
+  'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY', 'XAUUSD', 'Other'
+];
+const DERIV_PAIRS = [
   'Volatility 5 Index',
   'Volatility 10 Index',
   'Volatility 15 Index',
@@ -445,18 +459,22 @@ function isSyntheticIndex(pair) {
   return /^(Volatility\s+\d+(\s+\(1s\))?\s+Index|Crash\s+\d+\s+Index|Boom\s+\d+\s+Index|Jump\s+\d+\s+Index|Step Index(\s+\d+)?)$/i.test((pair || '').trim());
 }
 
+function getCurrentPairOptions() {
+  return activeJournal === 'deriv' ? DERIV_PAIRS : GENERAL_PAIRS;
+}
+
 function renderPairOptions() {
   const select = document.getElementById('f_pair');
   if (!select) return;
   const currentValue = select.value;
   select.innerHTML = '<option value="">Select...</option>';
-  JOURNAL_PAIRS.forEach(pair => {
+  getCurrentPairOptions().forEach(pair => {
     const option = document.createElement('option');
     option.value = pair;
     option.textContent = pair;
     select.appendChild(option);
   });
-  if (currentValue) select.value = currentValue;
+  if (currentValue && getCurrentPairOptions().includes(currentValue)) select.value = currentValue;
 }
 
 function getPipSize(pair) {
@@ -646,12 +664,16 @@ function setSyncState(state, label) {
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────
+function apiPath(path) {
+  return `${path}?journal=${activeJournal}`;
+}
+
 async function apiFetch(path, method='GET', body=null) {
   setSyncState('loading', 'syncing...');
   try {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(API + path, opts);
+    const res = await fetch(API + apiPath(path), opts);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     setSyncState('ok', 'synced');
@@ -663,18 +685,49 @@ async function apiFetch(path, method='GET', body=null) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
-async function init() {
-  renderPairOptions();
+function updateJournalUI() {
+  const isDeriv = activeJournal === 'deriv';
+  document.getElementById('modeGeneralBtn').classList.toggle('active', !isDeriv);
+  document.getElementById('modeDerivBtn').classList.toggle('active', isDeriv);
+  document.getElementById('accountCurrency').disabled = isDeriv;
+  if (isDeriv) {
+    accountCurrency = 'USD';
+    document.getElementById('accountCurrency').value = 'USD';
+    document.getElementById('journalHint').textContent = 'Deriv mode uses USD only and stores trades separately.';
+  } else {
+    document.getElementById('journalHint').textContent = 'General and Deriv journals share one database but stay separated.';
+  }
+}
+
+async function loadSettings() {
   try {
     const settings = await apiFetch('/api/settings');
     startingBalance = settings.starting_balance || 500;
-    accountCurrency = 'USD';
-    document.getElementById('startBalance').value = startingBalance;
-    document.getElementById('accountCurrencyBadge').textContent = 'USD Only';
+    accountCurrency = activeJournal === 'deriv' ? 'USD' : (settings.account_currency || 'QAR');
   } catch(e) {
-    accountCurrency = 'USD';
-    document.getElementById('accountCurrencyBadge').textContent = 'USD Only';
+    startingBalance = 500;
+    accountCurrency = activeJournal === 'deriv' ? 'USD' : 'QAR';
   }
+  document.getElementById('startBalance').value = startingBalance;
+  document.getElementById('accountCurrency').value = accountCurrency;
+  updateJournalUI();
+}
+
+async function switchJournal(mode) {
+  if (mode !== 'general' && mode !== 'deriv') return;
+  if (activeJournal === mode) return;
+  activeJournal = mode;
+  selectedDate = '';
+  renderPairOptions();
+  clearForm();
+  await loadSettings();
+  await loadTrades();
+  if (document.getElementById('panel-stats').classList.contains('active')) loadStats();
+}
+
+async function init() {
+  renderPairOptions();
+  await loadSettings();
   await loadTrades();
 }
 
@@ -698,9 +751,9 @@ async function loadTrades() {
 
 async function saveSettings() {
   startingBalance = parseFloat(document.getElementById('startBalance').value) || 500;
-  accountCurrency = 'USD';
-  document.getElementById('accountCurrencyBadge').textContent = 'USD Only';
-  try { await apiFetch('/api/settings', 'PUT', { starting_balance: startingBalance, account_currency: 'USD' }); }
+  accountCurrency = activeJournal === 'deriv' ? 'USD' : (document.getElementById('accountCurrency').value || 'QAR');
+  updateJournalUI();
+  try { await apiFetch('/api/settings', 'PUT', { starting_balance: startingBalance, account_currency: accountCurrency }); }
   catch(e) {}
   renderTable();
   if (document.getElementById('panel-stats').classList.contains('active')) loadStats();
@@ -727,10 +780,11 @@ function clearForm() {
   ['f_date','f_pair','f_session','f_dir','f_entry','f_sl','f_tp','f_exit',
    'f_lot','f_result','f_pips','f_pnl','f_rr','f_strategy','f_notes']
   .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('f_pnl_override').checked = true;
-  document.getElementById('f_pnl').readOnly = false;
-  document.getElementById('f_pnl').classList.remove('calc-val');
-  document.getElementById('pnlField').classList.add('is-manual');
+  const isDeriv = activeJournal === 'deriv';
+  document.getElementById('f_pnl_override').checked = isDeriv;
+  document.getElementById('f_pnl').readOnly = !isDeriv;
+  document.getElementById('f_pnl').classList.toggle('calc-val', !isDeriv);
+  document.getElementById('pnlField').classList.toggle('is-manual', isDeriv);
   document.getElementById('f_date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('formTitle').textContent = 'New Trade Entry';
   document.getElementById('saveBtn').textContent = 'Save Trade';
@@ -760,6 +814,7 @@ async function saveTrade() {
   const result = document.getElementById('f_result').value || detectResultFromPnl(metrics.pnl);
 
   const payload = {
+    journal_type: activeJournal,
     date: date||null, pair,
     session:   document.getElementById('f_session').value||null,
     direction: metrics.dir||null,
@@ -1257,7 +1312,7 @@ function exportCSV() {
   const rows=trades.map(t=>[t.date,t.pair,t.session,t.direction,t.entry_price,t.stop_loss,t.take_profit,t.exit_price,t.lot_size,t.result,t.pips,t.pnl,t.broker_pnl,t.pnl_override,t.rr_ratio,t.strategy,`"${(t.notes||'').replace(/"/g,'""')}"`].join(','));
   const a=document.createElement('a');
   a.href='data:text/csv,'+encodeURIComponent([h.join(','),...rows].join('\\n'));
-  a.download='PM23FX_Trades.csv'; a.click();
+  a.download=activeJournal === 'deriv' ? 'PM23FX_Deriv_Trades.csv' : 'PM23FX_General_Trades.csv'; a.click();
   toast('CSV exported');
 }
 
