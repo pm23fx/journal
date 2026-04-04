@@ -8,6 +8,10 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+const JOURNAL_TYPE = 'deriv';
+const SETTINGS_ID = 2;
+const DEFAULT_SETTINGS = { starting_balance: 500, account_currency: 'USD' };
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -35,7 +39,8 @@ export async function onRequest(context) {
     const alters = [
       "ALTER TABLE trades ADD COLUMN broker_pnl REAL",
       "ALTER TABLE trades ADD COLUMN pnl_override INTEGER DEFAULT 0",
-      "ALTER TABLE trades ADD COLUMN photo_broker TEXT"
+      "ALTER TABLE trades ADD COLUMN photo_broker TEXT",
+      "ALTER TABLE trades ADD COLUMN journal_type TEXT DEFAULT 'general'"
     ];
     for (const sql of alters) {
       try { await DB.prepare(sql).run(); } catch (e) {}
@@ -46,8 +51,8 @@ export async function onRequest(context) {
   if (path === '/api/trades' && request.method === 'GET') {
     await ensureTradeColumns();
     const { results } = await DB.prepare(
-      'SELECT * FROM trades ORDER BY date DESC, id DESC'
-    ).all();
+      'SELECT * FROM trades WHERE journal_type = ? ORDER BY date DESC, id DESC'
+    ).bind(JOURNAL_TYPE).all();
     return json(results);
   }
 
@@ -56,8 +61,8 @@ export async function onRequest(context) {
 
   if (tradeMatch && request.method === 'GET') {
     await ensureTradeColumns();
-    const trade = await DB.prepare('SELECT * FROM trades WHERE id = ?')
-      .bind(tradeMatch[1]).first();
+    const trade = await DB.prepare('SELECT * FROM trades WHERE id = ? AND journal_type = ?')
+      .bind(tradeMatch[1], JOURNAL_TYPE).first();
     if (!trade) return err('Not found', 404);
     return json(trade);
   }
@@ -71,15 +76,15 @@ export async function onRequest(context) {
     const r = await DB.prepare(`
       INSERT INTO trades (date, pair, session, direction, entry_price, stop_loss,
         take_profit, exit_price, lot_size, result, pips, pnl, broker_pnl,
-        pnl_override, rr_ratio, strategy, notes, photo_before, photo_after, photo_broker)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        pnl_override, rr_ratio, strategy, notes, photo_before, photo_after, photo_broker, journal_type)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(
       b.date||null, b.pair, b.session||null, b.direction||null,
       b.entry_price||null, b.stop_loss||null, b.take_profit||null,
       b.exit_price||null, b.lot_size||null, b.result||null,
       b.pips||null, b.pnl||null, b.broker_pnl||null, b.pnl_override ? 1 : 0, b.rr_ratio||null,
       b.strategy||null, b.notes||null,
-      b.photo_before||null, b.photo_after||null, b.photo_broker||null
+      b.photo_before||null, b.photo_after||null, b.photo_broker||null, JOURNAL_TYPE
     ).run();
 
     return json({ id: r.meta.last_row_id, success: true }, 201);
@@ -96,8 +101,8 @@ export async function onRequest(context) {
         date=?, pair=?, session=?, direction=?, entry_price=?, stop_loss=?,
         take_profit=?, exit_price=?, lot_size=?, result=?, pips=?, pnl=?,
         broker_pnl=?, pnl_override=?, rr_ratio=?, strategy=?, notes=?, photo_before=?, photo_after=?, photo_broker=?,
-        updated_at=CURRENT_TIMESTAMP
-      WHERE id=?
+        journal_type=?, updated_at=CURRENT_TIMESTAMP
+      WHERE id=? AND journal_type=?
     `).bind(
       b.date||null, b.pair, b.session||null, b.direction||null,
       b.entry_price||null, b.stop_loss||null, b.take_profit||null,
@@ -105,7 +110,7 @@ export async function onRequest(context) {
       b.pips||null, b.pnl||null, b.broker_pnl||null, b.pnl_override ? 1 : 0, b.rr_ratio||null,
       b.strategy||null, b.notes||null,
       b.photo_before||null, b.photo_after||null, b.photo_broker||null,
-      tradeMatch[1]
+      JOURNAL_TYPE, tradeMatch[1], JOURNAL_TYPE
     ).run();
 
     return json({ success: true });
@@ -113,7 +118,7 @@ export async function onRequest(context) {
 
   // ── DELETE /api/trades/:id ────────────────────────────────────────────
   if (tradeMatch && request.method === 'DELETE') {
-    await DB.prepare('DELETE FROM trades WHERE id = ?').bind(tradeMatch[1]).run();
+    await DB.prepare('DELETE FROM trades WHERE id = ? AND journal_type = ?').bind(tradeMatch[1], JOURNAL_TYPE).run();
     return json({ success: true });
   }
 
@@ -132,35 +137,35 @@ export async function onRequest(context) {
         ROUND(AVG(rr_ratio),2) as avg_rr,
         ROUND(MAX(pnl),2) as best_trade,
         ROUND(MIN(pnl),2) as worst_trade
-      FROM trades
-    `).first();
+      FROM trades WHERE journal_type = ?
+    `).bind(JOURNAL_TYPE).first();
 
     const sessions = await DB.prepare(`
       SELECT session,
         COUNT(*) as trades,
         SUM(CASE WHEN result='Win' THEN 1 ELSE 0 END) as wins,
         ROUND(SUM(pnl),2) as pnl
-      FROM trades WHERE session IS NOT NULL
+      FROM trades WHERE journal_type = ? AND session IS NOT NULL
       GROUP BY session ORDER BY trades DESC
-    `).all();
+    `).bind(JOURNAL_TYPE).all();
 
     const pairs = await DB.prepare(`
       SELECT pair,
         COUNT(*) as trades,
         SUM(CASE WHEN result='Win' THEN 1 ELSE 0 END) as wins,
         ROUND(SUM(pnl),2) as pnl
-      FROM trades WHERE pair IS NOT NULL
+      FROM trades WHERE journal_type = ? AND pair IS NOT NULL
       GROUP BY pair ORDER BY trades DESC LIMIT 10
-    `).all();
+    `).bind(JOURNAL_TYPE).all();
 
     const strategies = await DB.prepare(`
       SELECT strategy,
         COUNT(*) as trades,
         SUM(CASE WHEN result='Win' THEN 1 ELSE 0 END) as wins,
         ROUND(SUM(pnl),2) as pnl
-      FROM trades WHERE strategy IS NOT NULL
+      FROM trades WHERE journal_type = ? AND strategy IS NOT NULL
       GROUP BY strategy ORDER BY trades DESC LIMIT 10
-    `).all();
+    `).bind(JOURNAL_TYPE).all();
 
     return json({
       summary,
@@ -173,24 +178,24 @@ export async function onRequest(context) {
   // ── GET /api/settings ─────────────────────────────────────────────────
   if (path === '/api/settings' && request.method === 'GET') {
     try {
-      await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'QAR'").run();
+      await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'USD'").run();
     } catch (e) {}
-    const s = await DB.prepare('SELECT * FROM settings WHERE id=1').first();
-    return json(s || { starting_balance: 500, account_currency: 'QAR' });
+    const s = await DB.prepare('SELECT * FROM settings WHERE id=?').bind(SETTINGS_ID).first();
+    return json(s || DEFAULT_SETTINGS);
   }
 
   // ── PUT /api/settings ─────────────────────────────────────────────────
   if (path === '/api/settings' && request.method === 'PUT') {
     try {
-      await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'QAR'").run();
+      await DB.prepare("ALTER TABLE settings ADD COLUMN account_currency TEXT DEFAULT 'USD'").run();
     } catch (e) {}
-    const { starting_balance, account_currency = 'QAR' } = await request.json();
+    const { starting_balance } = await request.json();
     await DB.prepare(`
-      INSERT INTO settings (id, starting_balance, account_currency) VALUES (1, ?, ?)
+      INSERT INTO settings (id, starting_balance, account_currency) VALUES (?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         starting_balance=excluded.starting_balance,
         account_currency=excluded.account_currency
-    `).bind(starting_balance, account_currency).run();
+    `).bind(SETTINGS_ID, starting_balance, 'USD').run();
     return json({ success: true });
   }
 
