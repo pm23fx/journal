@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS trades (
   photo_before  TEXT,   -- base64 JPEG compressed
   photo_after   TEXT,   -- base64 JPEG compressed
   photo_broker  TEXT,   -- base64 JPEG compressed
+  journal_type  TEXT DEFAULT 'general',
   created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -30,12 +31,13 @@ CREATE TABLE IF NOT EXISTS trades (
 CREATE TABLE IF NOT EXISTS settings (
   id                INTEGER PRIMARY KEY,
   starting_balance  REAL DEFAULT 500,
-  account_currency  TEXT DEFAULT 'QAR',
+  account_currency  TEXT DEFAULT 'USD',
   updated_at        TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Insert default settings row
 INSERT OR IGNORE INTO settings (id, starting_balance, account_currency) VALUES (1, 500, 'QAR');
+INSERT OR IGNORE INTO settings (id, starting_balance, account_currency) VALUES (2, 500, 'USD');
 
 -- Index for faster queries
 CREATE INDEX IF NOT EXISTS idx_trades_date   ON trades(date DESC);

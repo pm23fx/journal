@@ -242,12 +242,9 @@
 <div id="panel-log" class="panel active">
   <div class="balance-row">
     <label>Starting Balance</label>
-    <select id="accountCurrency" onchange="saveSettings()">
-      <option value="QAR">QAR</option>
-      <option value="USD">USD</option>
-    </select>
+    <div class="month-pill" id="accountCurrencyBadge">USD Only</div>
     <input type="number" id="startBalance" value="102" onchange="saveSettings()">
-    <span>Saved to cloud — accessible from any device</span>
+    <span>Deriv journal settings are saved separately in the shared cloud database</span>
   </div>
 
   <div class="form-box" id="tradeForm" style="display:none">
@@ -386,7 +383,7 @@ let editId = null;
 let photoData = { before: null, after: null, broker: null };
 let lbTrade = null;
 let startingBalance = 500;
-let accountCurrency = 'QAR';
+let accountCurrency = 'USD';
 let selectedMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedDate = '';
 const FX_TO_USD = {
@@ -671,10 +668,13 @@ async function init() {
   try {
     const settings = await apiFetch('/api/settings');
     startingBalance = settings.starting_balance || 500;
-    accountCurrency = settings.account_currency || 'QAR';
+    accountCurrency = 'USD';
     document.getElementById('startBalance').value = startingBalance;
-    document.getElementById('accountCurrency').value = accountCurrency;
-  } catch(e) {}
+    document.getElementById('accountCurrencyBadge').textContent = 'USD Only';
+  } catch(e) {
+    accountCurrency = 'USD';
+    document.getElementById('accountCurrencyBadge').textContent = 'USD Only';
+  }
   await loadTrades();
 }
 
@@ -698,8 +698,9 @@ async function loadTrades() {
 
 async function saveSettings() {
   startingBalance = parseFloat(document.getElementById('startBalance').value) || 500;
-  accountCurrency = document.getElementById('accountCurrency').value || 'QAR';
-  try { await apiFetch('/api/settings', 'PUT', { starting_balance: startingBalance, account_currency: accountCurrency }); }
+  accountCurrency = 'USD';
+  document.getElementById('accountCurrencyBadge').textContent = 'USD Only';
+  try { await apiFetch('/api/settings', 'PUT', { starting_balance: startingBalance, account_currency: 'USD' }); }
   catch(e) {}
   renderTable();
   if (document.getElementById('panel-stats').classList.contains('active')) loadStats();
@@ -726,13 +727,14 @@ function clearForm() {
   ['f_date','f_pair','f_session','f_dir','f_entry','f_sl','f_tp','f_exit',
    'f_lot','f_result','f_pips','f_pnl','f_rr','f_strategy','f_notes']
   .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('f_pnl_override').checked = false;
-  document.getElementById('f_pnl').readOnly = true;
-  document.getElementById('f_pnl').classList.add('calc-val');
-  document.getElementById('pnlField').classList.remove('is-manual');
+  document.getElementById('f_pnl_override').checked = true;
+  document.getElementById('f_pnl').readOnly = false;
+  document.getElementById('f_pnl').classList.remove('calc-val');
+  document.getElementById('pnlField').classList.add('is-manual');
   document.getElementById('f_date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('formTitle').textContent = 'New Trade Entry';
   document.getElementById('saveBtn').textContent = 'Save Trade';
+  handlePnlModeChange();
   updateCurrencyUI();
 }
 
